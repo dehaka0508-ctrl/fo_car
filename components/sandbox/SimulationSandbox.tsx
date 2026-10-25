@@ -246,7 +246,7 @@ export function SimulationSandbox() {
           {/* 프로필 */}
           <section className={`${cardClass} flex flex-col gap-4 sm:flex-row`} aria-label="선수 프로필">
             <div className="flex flex-col items-center gap-2">
-              <Avatar appearance={player.profile.appearance} kitColor={club.colors.primary} size={112} />
+              <Avatar appearance={player.profile.appearance} kit={club.kitColors} size={112} />
               <span className="text-xs text-zinc-500">{club.nameKo}</span>
             </div>
             <div className="flex flex-1 flex-col gap-3">
@@ -402,7 +402,7 @@ function TurnCard({ turn, player }: { turn: TurnResult; player: PlayerState }) {
               <div className="text-zinc-500">vs {h.opponent.name}</div>
               {h.score.penalties ? <div className="text-zinc-500">승부차기</div> : null}
             </div>
-            <PlayerToken label={h.opponent.name} color={world.clubs[h.opponent.id.split('#')[0]]?.colors.primary} />
+            <PlayerToken label={h.opponent.name} kit={world.clubs[h.opponent.id.split('#')[0]]?.kitColors} />
           </div>
           {h.playerLine ? (
             <p className="mt-2 text-zinc-600 dark:text-zinc-300">

@@ -93,7 +93,7 @@ export const SIM_CONFIG = {
   individual: {
     /** 팀 수준 대비 세부 능력치 차이가 점유율에 미치는 폭 (클수록 완만) */
     shareSpread: 18,
-    maxGoalShare: 0.45,
+    maxGoalShare: 0.38,
     maxAssistShare: 0.4,
     /** 도움이 기록되는 골의 비율 */
     assistedGoalRatio: 0.72,
@@ -470,6 +470,11 @@ export function choiceSuccessChance(
 // 코어 수식 — 턴 결과 보정
 // ============================================================================
 
+/** 리그 수준에 따른 명성 가중치 (EPL 1.0, K리그1 0.7, K리그2 0.55) */
+export function leagueReputationWeight(leagueStrength: number): number {
+  return 0.4 + clamp((leagueStrength - 50) / 28, 0, 1.05) * 0.6;
+}
+
 /** 명성 변화: 평점·공격포인트·리그 수준·우승. 명성이 높을수록 상승폭이 줄어든다. */
 export function calculateReputationDelta(params: {
   reputation: number;
@@ -490,11 +495,10 @@ export function calculateReputationDelta(params: {
     const playFactor = Math.min(1, params.appearances / Math.max(1, params.eligibleMatches * 0.8));
     const performance = (params.averageRating - 6.6) * 4 * playFactor;
     const output = (params.goals + params.assists * 0.7 + params.cleanSheets * 0.4) * 0.12;
-    const leagueFactor = 0.5 + (params.leagueStrength / 100) * 0.7;
-    delta = (performance + output) * leagueFactor;
+    delta = (performance + output) * leagueReputationWeight(params.leagueStrength);
   }
   delta += params.trophyBonus + params.highlightBonus;
-  if (delta > 0) delta *= Math.max(0.15, 1 - params.reputation / 120);
+  if (delta > 0) delta *= Math.max(0.05, (1 - params.reputation / 105) ** 1.3);
   return round1(delta);
 }
 
@@ -1567,9 +1571,10 @@ export function finalizeTurn(session: TurnSession): TurnResult {
   const trophyBonus =
     competitive.appearances > 0
       ? trophies.reduce((sum, t) => {
-          if (t.competitionId === s.leagueId) return sum + LEAGUE_TITLE_BONUS;
+          const domesticWeight = leagueReputationWeight(s.leagueStrength);
+          if (t.competitionId === s.leagueId) return sum + LEAGUE_TITLE_BONUS * domesticWeight;
           const prestige = s.competitionPrestige[t.competitionId];
-          return sum + (prestige === undefined ? DOMESTIC_CUP_BONUS : (prestige / 100) * PRESTIGE_TROPHY_SCALE);
+          return sum + (prestige === undefined ? DOMESTIC_CUP_BONUS * domesticWeight : (prestige / 100) * PRESTIGE_TROPHY_SCALE);
         }, 0)
       : 0;
 

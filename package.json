@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "sim": "tsx scripts/sim-season.ts"
+    "sim": "tsx scripts/sim-season.ts",
+    "sim:career": "tsx scripts/sim-career.ts"
   },
   "dependencies": {
     "next": "16.4.3",

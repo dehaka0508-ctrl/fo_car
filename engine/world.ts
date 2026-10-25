@@ -3,13 +3,17 @@
  */
 import { CLUBS } from '@/data/clubs';
 import { COMPETITIONS } from '@/data/competitions';
+import { CLUB_LEGENDS, HISTORIC_RECORDS } from '@/data/legends';
 import { LEAGUES } from '@/data/leagues';
 import { NATIONS } from '@/data/nations';
 import type {
   ClubDefinition,
+  ClubLegend,
   ClubState,
   CompetitionDefinition,
+  HistoricRecord,
   ID,
+  KitColors,
   LeagueDefinition,
   NationDefinition,
   TeamRef,
@@ -21,6 +25,8 @@ export interface SimulationWorld {
   nations: Record<string, NationDefinition>;
   competitions: Record<ID, CompetitionDefinition>;
   clubStates: Record<ID, ClubState>;
+  legends: Record<ID, ClubLegend[]>;
+  records: HistoricRecord[];
 }
 
 /**
@@ -50,6 +56,7 @@ export function createInitialClubStates(
         continentalCompetitionId: slot?.competitionId ?? null,
         lastLeaguePosition: position,
         squadNpcIds: [],
+        squadSeason: null,
       };
     });
   }
@@ -63,7 +70,29 @@ export function createDefaultWorld(): SimulationWorld {
     nations: NATIONS,
     competitions: COMPETITIONS,
     clubStates: createInitialClubStates(LEAGUES, CLUBS),
+    legends: CLUB_LEGENDS,
+    records: HISTORIC_RECORDS,
   };
+}
+
+/** 정적 데이터는 공유하고 구단 동적 상태만 세이브의 것으로 바꾼 월드 */
+export function worldWithClubStates(base: SimulationWorld, clubStates: Record<ID, ClubState>): SimulationWorld {
+  return { ...base, clubStates };
+}
+
+export function legendsFor(world: SimulationWorld, clubId: ID): ClubLegend[] {
+  return world.clubs[clubId]?.legends ?? world.legends[clubId] ?? [];
+}
+
+/** 팀 id(구단·리저브·국가대표)로 유니폼 색을 찾는다. 가상 팀은 null */
+export function kitColorsFor(world: SimulationWorld, teamId: ID): KitColors | null {
+  if (teamId.startsWith('nation:')) return world.nations[teamId.slice(7)]?.kitColors ?? null;
+  return world.clubs[teamId.split('#')[0]]?.kitColors ?? null;
+}
+
+export function clubName(world: SimulationWorld, clubId: ID | null | undefined): string {
+  if (!clubId) return '무소속';
+  return world.clubs[clubId]?.nameKo ?? clubId;
 }
 
 export function getLeagueClubIds(world: SimulationWorld, leagueId: ID): ID[] {

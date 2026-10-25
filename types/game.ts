@@ -219,6 +219,8 @@ export interface TransferOffer {
   competitors: SquadCompetitor[];
   /** 영혼의 파트너가 뛰고 있는 팀의 오퍼라면 파트너 NPC id */
   partnerNpcId?: ID;
+  /** 오퍼 사유 한 줄 (UI 표시용) */
+  note?: string;
   createdAt: TurnPointer;
   status: OfferStatus;
 }
@@ -229,6 +231,8 @@ export interface NegotiationQuota {
   counterOffersUsed: number;
   /** 이번 턴에 현 소속팀 재계약 역제의를 했는지 */
   renewalRequested: boolean;
+  /** 이번 턴 역제의 결과 기록 (UI 표시용) */
+  log: Array<{ clubId: ID; type: OfferType; accepted: boolean; message: string }>;
 }
 
 // ============================================================================
@@ -304,6 +308,15 @@ export interface Rival {
 
 export type Confederation = 'UEFA' | 'AFC' | 'CONMEBOL' | 'CONCACAF' | 'CAF' | 'OFC';
 
+/**
+ * 유니폼 색. secondary가 null이면 단색, 있으면 1-2-1-2-1 세로 줄무늬
+ * (primary · secondary · primary · secondary · primary)로 렌더링한다.
+ */
+export interface KitColors {
+  primary: string;
+  secondary: string | null;
+}
+
 export interface NationDefinition {
   code: NationCode;
   name: string;
@@ -311,6 +324,7 @@ export interface NationDefinition {
   confederation: Confederation;
   /** 국가대표팀 실력 (구단 실력과 같은 스케일) */
   power: number;
+  kitColors?: KitColors;
 }
 
 /** 리그 순위 구간별 대륙 대회 진출권 */
@@ -375,9 +389,12 @@ export interface ClubDefinition {
   power: number;
   prestige: number;
   finance: number;
-  colors: { primary: string; secondary: string };
+  kitColors: KitColors;
   /** 더비 상대 구단 */
   rivals: ID[];
+  /** false면 승격 불가 (B팀 등) */
+  promotionEligible?: boolean;
+  /** 동 포지션 역사적 레전드 (없으면 data/legends.ts 참조) */
   legends?: ClubLegend[];
 }
 
@@ -589,6 +606,8 @@ export interface MatchSituation {
   minute: number;
   description: string;
   tokens: MatchToken[];
+  /** 공 위치 (0~100). 주인공 팀은 항상 왼쪽 → 오른쪽으로 공격한다 */
+  ball: { x: number; y: number };
   options: SituationOption[];
 }
 
@@ -769,7 +788,8 @@ export type EventEffect =
   | { kind: 'ATTRIBUTE'; key: AttributeKey; delta: number }
   | { kind: 'CATEGORY'; category: StatCategory; delta: number }
   | { kind: 'REPUTATION'; delta: number }
-  | { kind: 'MONEY'; delta: number }
+  /** perReputation: 명성 1당 추가 금액 (스폰서 등) */
+  | { kind: 'MONEY'; delta: number; perReputation?: number }
   | { kind: 'STANDING'; delta: number }
   | { kind: 'GROWTH_FOCUS'; category: StatCategory; multiplier: number; turns: number }
   | { kind: 'FLAG'; flag: GameFlag; value: boolean };
@@ -777,29 +797,47 @@ export type EventEffect =
 export interface EventChoice {
   id: ID;
   label: string;
+  description?: string;
+  /** 선택에 필요한 돈 (부족하면 선택 불가) */
+  cost?: number;
   effects: EventEffect[];
   /** 지정 시 확률 판정. 실패하면 failureEffects 적용 */
   successChance?: number;
   failureEffects?: EventEffect[];
 }
 
+export interface EventRequirement {
+  partner?: boolean;
+  rival?: boolean;
+  firstTeam?: boolean;
+  hasClub?: boolean;
+  minReputation?: number;
+  minMoney?: number;
+}
+
 export interface GameEventDefinition {
   id: ID;
   category: EventCategory;
   title: string;
+  /** {name} {club} {partner} {rival} 치환 */
   body: string;
   /** 이 턴이 끝난 직후에만 발생 */
   phases: TurnPhase[];
+  /** 이 턴이 끝나면 반드시 발생 (프리시즌 휴가 계획) */
+  guaranteed?: boolean;
   weight: number;
   minAge?: number;
   maxAge?: number;
+  requires?: EventRequirement;
   choices: EventChoice[];
 }
 
-export interface PendingEvent {
+/** 턴 사이에 발생한 사건 인스턴스 */
+export interface ActiveEvent {
   instanceId: ID;
   definitionId: ID;
-  turn: TurnPointer;
+  vars: Record<string, string>;
+  resolution: { choiceId: ID; success: boolean; summary: string[] } | null;
 }
 
 // ============================================================================
@@ -809,8 +847,8 @@ export interface PendingEvent {
 export type TrainingIntensity = 'LIGHT' | 'NORMAL' | 'INTENSE';
 
 export type TrainingPlan =
-  /** 큰 카테고리 1개(세부 3개 전체) 소폭 상승 */
-  | { kind: 'CATEGORY'; category: StatCategory; intensity: TrainingIntensity }
+  /** 큰 카테고리 1개(세부 3개 전체, 골키핑은 6개) 소폭 상승 */
+  | { kind: 'CATEGORY'; category: AttributeGroup; intensity: TrainingIntensity }
   /** 세부 능력치 2~3개 동시 상승 */
   | { kind: 'FOCUSED'; attributes: AttributeKey[]; intensity: TrainingIntensity }
   /** 몸무게↑ 몸싸움·제공권↑ / 가속력·민첩성↓ */
@@ -818,6 +856,14 @@ export type TrainingPlan =
   /** 몸무게↓ 가속력·민첩성↑ / 몸싸움·제공권↓ */
   | { kind: 'CUT'; intensity: TrainingIntensity }
   | { kind: 'REST' };
+
+export interface TrainingResult {
+  plan: TrainingPlan;
+  deltas: Partial<Record<AttributeKey, number>>;
+  weightDelta: number;
+  conditionDelta: number;
+  mentalDelta: number;
+}
 
 /** 사건으로 얻는 일정 기간 육성 방향 보너스 */
 export interface GrowthFocus {
@@ -835,15 +881,19 @@ export type ItemCategory = 'EQUIPMENT' | 'FASHION' | 'HOUSE' | 'SUPERCAR' | 'WEL
 export interface ShopItemDefinition {
   id: ID;
   name: string;
+  description: string;
   category: ItemCategory;
   price: number;
   attribute: AttributeKey;
+  /** 최대 상승량 (실제 상승은 나이·훈련 1회 상승량으로 제한) */
   baseBoost: number;
 }
 
 export interface OwnedItem {
   itemId: ID;
   purchasedAt: TurnPointer;
+  /** 실제로 얻은 효과 */
+  effect: { mode: 'BOOST'; amount: number } | { mode: 'SHIELD'; amount: number };
 }
 
 // ============================================================================
@@ -866,6 +916,7 @@ export interface PlayerProfile {
 export interface NationalTeamStatus {
   caps: number;
   goals: number;
+  assists: number;
   lastCallUp: TurnPointer | null;
 }
 
@@ -892,10 +943,14 @@ export interface PlayerState {
   money: number;
   /** null = FA */
   contract: Contract | null;
+  /** 임대 중일 때 원소속 구단과의 계약 (임대 종료 시 복귀) */
+  parentContract: Contract | null;
   squad: SquadStatus;
   nationalTeam: NationalTeamStatus;
   growthFocus: GrowthFocus | null;
   inventory: OwnedItem[];
+  /** 노화 방어: 다음 시즌 노화 하락에서 차감할 양 (30대 아이템 효과) */
+  agingShields: Partial<Record<AttributeKey, number>>;
   career: Record<CompetitionType, PlayerStatLine>;
   clubHistory: ClubSpell[];
   retired: boolean;
@@ -918,13 +973,80 @@ export interface ClubState {
   lastLeaguePosition: number | null;
   /** 주인공과 포지션이 겹치는 추적 NPC (경쟁 선수 생태계) */
   squadNpcIds: ID[];
+  /** 경쟁 선수 목록을 만든 시즌 (null = 아직 없음) */
+  squadSeason: number | null;
 }
 
-export type GameStage = 'CREATION' | 'BETWEEN_TURNS' | 'IN_TURN' | 'RETIRED';
+export type GameStage = 'READY' | 'IN_TURN' | 'RETIRED';
+
+export type NoticeKind =
+  | 'RECORD'
+  | 'LEGEND'
+  | 'AWARD'
+  | 'TRANSFER'
+  | 'CONTRACT'
+  | 'SQUAD'
+  | 'PROMOTION'
+  | 'PARTNER'
+  | 'RIVAL'
+  | 'NATIONAL'
+  | 'INFO';
+
+export interface Notice {
+  id: ID;
+  turn: TurnPointer;
+  kind: NoticeKind;
+  title: string;
+  body: string;
+  /** 팝업으로 띄울 중요 알림 (기록 경신·레전드 등) */
+  popup: boolean;
+}
+
+export interface CeremonyEntry {
+  award: AwardType;
+  label: string;
+  winner: { name: string; clubName: string; nationality: NationCode; isPlayer: boolean };
+  /** 주인공 순위 (순위권 밖이면 null) */
+  playerRank: number | null;
+  /** 발롱도르 등 순위형 시상의 상위권 */
+  ranking?: Array<{ rank: number; name: string; clubName: string; isPlayer: boolean }>;
+  detail?: string;
+}
+
+export interface Ceremony {
+  kind: 'LEAGUE' | 'WORLD';
+  season: number;
+  title: string;
+  entries: CeremonyEntry[];
+}
+
+/** 구단·리그별 통산 기록 (기록 경신·레전드 판정용) */
+export interface CareerStatLine {
+  appearances: number;
+  goals: number;
+  assists: number;
+  cleanSheets: number;
+  trophies: number;
+  firstSeason: number;
+  lastSeason: number;
+}
+
+export interface RetirementSummary {
+  season: number;
+  age: number;
+  reason: 'VOLUNTARY' | 'AGE' | 'NO_CLUB';
+  totals: PlayerStatLine;
+  trophies: number;
+  awards: number;
+  ballonDorWins: number;
+  clubs: ID[];
+  legendClubs: ID[];
+}
 
 export interface GameState {
   saveVersion: number;
   seed: number;
+  /** 다음에 진행할 턴 */
   turn: TurnPointer;
   stage: GameStage;
   player: PlayerState;
@@ -935,21 +1057,30 @@ export interface GameState {
   rival: Rival | null;
   offers: TransferOffer[];
   negotiation: NegotiationQuota;
-  pendingEvents: PendingEvent[];
-  /** 턴 사이 상점 구매는 1회 */
-  shopPurchasedThisTurn: boolean;
+  /** 이번 턴 사이에 발생한 사건 (모두 답해야 다음 턴 진행) */
+  events: ActiveEvent[];
+  /** 턴 사이 행동 (훈련 1회, 구매 1회) */
+  interTurn: { training: TrainingResult | null; purchasedItemId: ID | null };
   flags: Partial<Record<GameFlag, boolean>>;
   /** 다음 턴으로 이월되는 대회 진행 상황 */
   progress: CompetitionProgress[];
   /** 진행 중인 시즌의 리그 순위표 (전반기 → 후반기 누적) */
   leagueTable: StandingRow[];
-  history: {
-    /** 최근 턴 원본 (용량 관리를 위해 일부만 보관) */
-    recentTurns: TurnResult[];
-    seasons: SeasonRecord[];
-  };
+  /** 이번 시즌 턴 결과 */
+  seasonTurns: TurnResult[];
+  /** 시즌 시작 시점 기록 (시즌 기록의 OVR 변화 표시용) */
+  seasonStart: { ovr: number; reputation: number };
+  lastTurn: TurnResult | null;
+  history: SeasonRecord[];
+  careerByClub: Record<ID, CareerStatLine>;
+  careerByLeague: Record<ID, CareerStatLine>;
   awards: AwardWin[];
   trophies: TrophyWin[];
   recordBreaks: RecordBreak[];
   legends: LegendInduction[];
+  notices: Notice[];
+  /** 확인 대기 중인 시상식 */
+  ceremonies: Ceremony[];
+  streaks: { starterTurnsAtClub: number; freeAgentTurns: number };
+  retirement: RetirementSummary | null;
 }

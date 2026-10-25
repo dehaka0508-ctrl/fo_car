@@ -493,6 +493,11 @@ function qualificationChance(tournament: InternationalTournamentDefinition, nati
   }
 }
 
+/** A대표 발탁 기준 (메이저 대회·A매치 기간 공통). form은 그 시기의 컨디션 변동 */
+export function isSeniorNationalCaliber(ovr: number, reputation: number, nationPower: number, form = 0): boolean {
+  return ovr + reputation * 0.04 + form >= nationPower - 8;
+}
+
 function nationalPlayingTime(ovr: number, teamPower: number, isGoalkeeper: boolean): PlayingTime {
   const diff = ovr - teamPower;
   if (isGoalkeeper) return diff >= -1 ? 'GK_FIRST' : diff >= -5 ? 'GK_SECOND' : 'GK_THIRD';
@@ -541,7 +546,7 @@ export function evaluateNationalDuty(params: {
           ? ovr + reputation * 0.03 + form >= team.power - 6
           : ovr >= nation.power + 3; // 와일드카드
     } else {
-      selected = ovr + reputation * 0.04 + form >= nation.power - 8;
+      selected = isSeniorNationalCaliber(ovr, reputation, nation.power, form);
     }
     if (selected) {
       return {

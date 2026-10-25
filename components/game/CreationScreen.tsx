@@ -1,0 +1,187 @@
+'use client';
+
+import Link from 'next/link';
+import { useMemo, useState } from 'react';
+import { Avatar } from '@/components/Avatar';
+import { EYE_COLORS, HAIR_COLORS, SKIN_TONES } from '@/data/appearance';
+import { PLAYING_TIME_LABELS, SQUAD_LEVEL_LABELS } from '@/data/labels';
+import { PLAYSTYLE_DEFINITIONS, POSITION_META } from '@/data/playstyles';
+import { BASE_WORLD } from '@/engine/career';
+import { createPlayer } from '@/engine/character';
+import { useGameStore } from '@/store/gameStore';
+import {
+  PLAYSTYLES_BY_POSITION,
+  POSITIONS,
+  type EyeColor,
+  type HairColor,
+  type PlayerRole,
+  type PlayStyle,
+  type Position,
+  type SkinTone,
+} from '@/types/game';
+import { Button, Card, Field, fieldClass, Stat } from './ui';
+
+const nations = Object.values(BASE_WORLD.nations).sort((a, b) => a.nameKo.localeCompare(b.nameKo, 'ko'));
+const leagues = Object.values(BASE_WORLD.leagues);
+const clubsByLeague = leagues.map((league) => ({
+  league,
+  clubs: Object.values(BASE_WORLD.clubs)
+    .filter((club) => club.leagueId === league.id)
+    .sort((a, b) => a.nameKo.localeCompare(b.nameKo, 'ko')),
+}));
+
+export function CreationScreen() {
+  const newCareer = useGameStore((s) => s.newCareer);
+  const [name, setName] = useState('김유망');
+  const [nationality, setNationality] = useState('KOR');
+  const [position, setPosition] = useState<Position>('ST');
+  const [playStyle, setPlayStyle] = useState<PlayStyle>('POACHER');
+  const [heightCm, setHeightCm] = useState(182);
+  const [weightKg, setWeightKg] = useState(76);
+  const [clubId, setClubId] = useState('ulsan');
+  const [hair, setHair] = useState<HairColor>('BLACK');
+  const [skin, setSkin] = useState<SkinTone>(3);
+  const [eyes, setEyes] = useState<EyeColor>('DARK_BROWN');
+
+  const input = {
+    name: name.trim() || '이름 없음',
+    nationality,
+    role: { position, playStyle } as PlayerRole,
+    heightCm,
+    weightKg,
+    appearance: { hair, skin, eyes },
+    clubId,
+  };
+  // 미리보기는 고정 시드로 (실제 시작 시에는 새 시드)
+  const preview = useMemo(
+    () => createPlayer(input, BASE_WORLD, { seed: 1, startSeason: 2026 }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [name, nationality, position, playStyle, heightCm, weightKg, clubId, hair, skin, eyes],
+  );
+  const club = BASE_WORLD.clubs[clubId];
+
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
+      <header className="flex flex-col gap-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">새 커리어</p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">16세 유망주를 만들어 주세요</h1>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          포지션·플레이 스타일·키·몸무게로 초기 능력치가 정해지고, 시작 팀 수준과 비교해 1군·B팀·유소년팀 중 출발점이 정해집니다.
+        </p>
+      </header>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <Card>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="이름">
+              <input className={fieldClass} value={name} maxLength={20} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            <Field label="국적">
+              <select className={fieldClass} value={nationality} onChange={(e) => setNationality(e.target.value)}>
+                {nations.map((n) => (
+                  <option key={n.code} value={n.code}>
+                    {n.nameKo}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="포지션">
+              <select
+                className={fieldClass}
+                value={position}
+                onChange={(e) => {
+                  const next = e.target.value as Position;
+                  setPosition(next);
+                  setPlayStyle(PLAYSTYLES_BY_POSITION[next][0]);
+                }}
+              >
+                {POSITIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {p} · {POSITION_META[p].label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="플레이 스타일">
+              <select className={fieldClass} value={playStyle} onChange={(e) => setPlayStyle(e.target.value as PlayStyle)}>
+                {(PLAYSTYLES_BY_POSITION[position] as readonly PlayStyle[]).map((s) => (
+                  <option key={s} value={s}>
+                    {PLAYSTYLE_DEFINITIONS[s].label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={`키 ${heightCm}cm`}>
+              <input type="range" min={155} max={205} value={heightCm} onChange={(e) => setHeightCm(Number(e.target.value))} />
+            </Field>
+            <Field label={`몸무게 ${weightKg}kg`}>
+              <input type="range" min={50} max={105} value={weightKg} onChange={(e) => setWeightKg(Number(e.target.value))} />
+            </Field>
+            <Field label="시작 팀" className="sm:col-span-2">
+              <select className={fieldClass} value={clubId} onChange={(e) => setClubId(e.target.value)}>
+                {clubsByLeague.map(({ league, clubs }) => (
+                  <optgroup key={league.id} label={league.nameKo}>
+                    {clubs.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nameKo}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </Field>
+            <div className="grid grid-cols-3 gap-2 sm:col-span-2">
+              <Field label="머리색">
+                <select className={fieldClass} value={hair} onChange={(e) => setHair(e.target.value as HairColor)}>
+                  {Object.entries(HAIR_COLORS).map(([key, v]) => (
+                    <option key={key} value={key}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="피부색">
+                <select className={fieldClass} value={skin} onChange={(e) => setSkin(Number(e.target.value) as SkinTone)}>
+                  {Object.entries(SKIN_TONES).map(([key, v]) => (
+                    <option key={key} value={key}>
+                      {key}단계 · {v.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="눈동자">
+                <select className={fieldClass} value={eyes} onChange={(e) => setEyes(e.target.value as EyeColor)}>
+                  {Object.entries(EYE_COLORS).map(([key, v]) => (
+                    <option key={key} value={key}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="flex flex-col items-center gap-4 self-start text-center">
+          <Avatar appearance={input.appearance} kit={club.kitColors} size={140} />
+          <div>
+            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-50">{input.name}</p>
+            <p className="text-xs text-zinc-500">
+              {BASE_WORLD.nations[nationality]?.nameKo} · 16세 · {club.nameKo}
+            </p>
+          </div>
+          <div className="grid w-full grid-cols-2 gap-3 text-left">
+            <Stat label="초기 OVR (예상)" value={preview.ovr} accent />
+            <Stat label="시작 입지" value={SQUAD_LEVEL_LABELS[preview.squad.level]} sub={PLAYING_TIME_LABELS[preview.squad.playingTime]} />
+          </div>
+          <Button variant="primary" className="w-full py-2.5 text-base" onClick={() => newCareer(input)}>
+            커리어 시작
+          </Button>
+          <Link href="/sandbox" className="text-xs text-zinc-500 underline-offset-2 hover:underline">
+            엔진 샌드박스 열기
+          </Link>
+        </Card>
+      </div>
+    </div>
+  );
+}

@@ -14,6 +14,8 @@ const list: CompetitionDefinition[] = [
   { id: 'ENG_FA_CUP', name: 'FA Cup', nameKo: 'FA컵', type: 'DOMESTIC_CUP', format: 'KNOCKOUT', nation: 'ENG', prestige: 70 },
   { id: 'ESP_COPA_DEL_REY', name: 'Copa del Rey', nameKo: '코파 델 레이', type: 'DOMESTIC_CUP', format: 'KNOCKOUT', nation: 'ESP', prestige: 66 },
   { id: 'KOR_FA_CUP', name: 'Korea Cup', nameKo: '코리아컵', type: 'DOMESTIC_CUP', format: 'KNOCKOUT', nation: 'KOR', prestige: 40 },
+  { id: 'KSA_KINGS_CUP', name: "King's Cup", nameKo: '킹스컵', type: 'DOMESTIC_CUP', format: 'KNOCKOUT', nation: 'KSA', prestige: 38 },
+  { id: 'USA_OPEN_CUP', name: 'U.S. Open Cup', nameKo: 'US 오픈컵', type: 'DOMESTIC_CUP', format: 'KNOCKOUT', nation: 'USA', prestige: 32 },
   // ----- 대륙 클럽 대항전 -----
   { id: 'UEFA_CL', name: 'UEFA Champions League', nameKo: 'UEFA 챔피언스리그', type: 'CONTINENTAL', format: 'GROUP_KNOCKOUT', confederation: 'UEFA', prestige: 100 },
   { id: 'UEFA_EL', name: 'UEFA Europa League', nameKo: 'UEFA 유로파리그', type: 'CONTINENTAL', format: 'GROUP_KNOCKOUT', confederation: 'UEFA', prestige: 72 },

@@ -1,9 +1,9 @@
-import { SimulationSandbox } from '@/components/sandbox/SimulationSandbox';
+import { CareerGame } from '@/components/game/CareerGame';
 
 export default function Home() {
   return (
     <main className="flex flex-1 flex-col">
-      <SimulationSandbox />
+      <CareerGame />
     </main>
   );
 }
