@@ -1,13 +1,57 @@
 'use client';
 
+import { Avatar, type AvatarTrophy } from '@/components/Avatar';
+import { BASE_WORLD } from '@/engine/career';
+import { kitColorsFor } from '@/engine/world';
 import { useGameStore } from '@/store/gameStore';
 import type { Ceremony, GameState, Notice } from '@/types/game';
 import { Button, cx, Modal, Tag } from './ui';
+
+/** 시상식 무대: 세계 시상식은 턱시도(+수상 트로피), 리그 시상식은 소속팀 유니폼 */
+function CeremonyStage({ ceremony }: { ceremony: Ceremony }) {
+  const player = useGameStore((s) => s.game?.player);
+  if (!player) return null;
+  const ballon = ceremony.entries.find((e) => e.award === 'BALLON_DOR');
+  const fifa = ceremony.entries.find((e) => e.award === 'FIFA_BEST');
+  const isWorld = ceremony.kind === 'WORLD';
+  const trophy: AvatarTrophy | null = isWorld ? (ballon?.winner.isPlayer ? 'BALLON_DOR' : fifa?.winner.isPlayer ? 'FIFA_BEST' : null) : null;
+  const clubId = player.contract?.clubId;
+  const kit = clubId ? kitColorsFor(BASE_WORLD, clubId) : null;
+  const rank = ballon?.playerRank ?? null;
+  const caption = !isWorld
+    ? `${player.profile.name}, 시즌을 마무리하는 시상식에 참석했다.`
+    : trophy === 'BALLON_DOR'
+      ? `${player.profile.name}, 발롱도르를 들어 올렸다!`
+      : trophy === 'FIFA_BEST'
+        ? `${player.profile.name}, FIFA 올해의 선수 트로피를 받았다!`
+        : rank !== null && rank <= 30
+          ? `턱시도를 차려입고 레드카펫에 섰다. 발롱도르 ${rank}위.`
+          : '턱시도를 차려입고 시상식을 지켜봤다.';
+  return (
+    <div
+      className={cx(
+        'mb-4 flex items-center gap-4 rounded-xl p-3',
+        isWorld ? 'bg-gradient-to-r from-zinc-900 via-zinc-800 to-amber-900 text-amber-50' : 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100',
+      )}
+    >
+      <Avatar
+        appearance={player.profile.appearance}
+        kit={kit}
+        outfit={isWorld ? 'TUXEDO' : 'KIT'}
+        trophy={trophy}
+        size={isWorld ? 104 : 72}
+        label={isWorld ? `${player.profile.name} (턱시도)` : player.profile.name}
+      />
+      <p className={cx('text-sm font-medium', trophy && 'text-base font-bold text-amber-200')}>{caption}</p>
+    </div>
+  );
+}
 
 export function CeremonyModal({ ceremony }: { ceremony: Ceremony }) {
   const dismiss = useGameStore((s) => s.dismissCeremony);
   return (
     <Modal title={`🏆 ${ceremony.title}`}>
+      <CeremonyStage ceremony={ceremony} />
       <ul className="flex flex-col gap-3">
         {ceremony.entries.map((entry) => {
           const won = entry.winner.isPlayer;

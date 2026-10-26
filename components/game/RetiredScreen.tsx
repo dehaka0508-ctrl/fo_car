@@ -7,6 +7,7 @@ import { averageRating } from '@/engine/simulator';
 import { formatMoney } from '@/engine/state';
 import { useGameStore } from '@/store/gameStore';
 import type { AwardType, GameState } from '@/types/game';
+import { CareerShareCard } from './CareerShareCard';
 import { clubLabel, ratingText } from './format';
 import { RecordsTab } from './tabs/RecordsTab';
 import { Button, Card, Stat, Tag } from './ui';
@@ -63,7 +64,9 @@ export function RetiredScreen({ game }: { game: GameState }) {
         </Card>
       ) : null}
 
-      <RecordsTab game={game} />
+      <CareerShareCard game={game} defaultOpen />
+
+      <RecordsTab game={game} showShare={false} />
     </div>
   );
 }

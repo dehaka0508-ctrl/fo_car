@@ -92,17 +92,33 @@ export const SIM_CONFIG = {
   mental: { min: 0.9, max: 1.1 },
   individual: {
     /** 팀 수준 대비 세부 능력치 차이가 점유율에 미치는 폭 (클수록 완만) */
-    shareSpread: 18,
-    maxGoalShare: 0.38,
-    maxAssistShare: 0.4,
+    shareSpread: 22,
+    /** 능력치 우위로 기본 점유율이 커질 수 있는 최대 배율 */
+    shareFactorMax: 1.8,
+    /**
+     * 점유율 상한. 상한의 shareKnee배를 넘는 부분부터 서서히 눌러서
+     * 압도적인 선수도 매 시즌 상한에 붙지 않게 한다 (홀란 36골/팀 94골 ≈ 0.38이 역대급).
+     * 득점 상한은 팀 수준에 따라 오른다: 강팀은 에이스에게 결정적 찬스를 몰아주는 완성도가 높아
+     * 월드클래스 공격수가 시즌 30~45골을 넣고, 약팀에서 혼자 몰아치는 기록은 덜 부풀려진다.
+     */
+    maxGoalShare: 0.27,
+    eliteGoalShareBonus: 0.1,
+    /** 이 실력 구간에서 득점 상한이 maxGoalShare → maxGoalShare + eliteGoalShareBonus로 오른다 */
+    eliteTeamPower: [70, 90] as readonly [number, number],
+    maxAssistShare: 0.27,
+    shareKnee: 0.6,
     /** 도움이 기록되는 골의 비율 */
     assistedGoalRatio: 0.72,
+    /** 키패스 1개가 도움으로 이어지는 비율 */
+    keyPassConversion: 0.16,
     /** 상대 기대 득점 1당 GK 선방 수 */
     savesPerExpectedGoal: 2.0,
   },
   rating: {
     base: 6.45,
     involvementWeight: 0.25,
+    /** 팀 수준을 웃도는 미드필더는 골·클린시트 보너스가 적은 대신 경기 장악(관여도)이 평점에 더 크게 반영된다 */
+    midfieldInvolvementWeight: 0.42,
     firstGoal: 1.0,
     extraGoal: 0.75,
     assist: 0.6,
@@ -112,6 +128,8 @@ export const SIM_CONFIG = {
     conceded: { GK: -0.25, DEF: -0.12, DM: -0.05 },
     save: 0.12,
     mentalWeight: 0.15,
+    /** 도움이 되지 않은 키패스 1개당 */
+    keyPass: 0.1,
     noiseSd: 0.45,
     /** 교체 출전은 평점 편차를 줄인다 */
     substituteRegression: 0.6,
@@ -348,7 +366,16 @@ export function decideParticipation(
 // ============================================================================
 
 function shareFactor(composite: number, teamPower: number): number {
-  return clamp(Math.exp((composite - teamPower) / SIM_CONFIG.individual.shareSpread), 0.3, 2.5);
+  const { shareSpread, shareFactorMax } = SIM_CONFIG.individual;
+  return clamp(Math.exp((composite - teamPower) / shareSpread), 0.3, shareFactorMax);
+}
+
+/** 상한의 knee배까지는 그대로, 그 위는 상한에 점점 가까워지기만 한다. */
+export function softCap(raw: number, max: number, knee = SIM_CONFIG.individual.shareKnee): number {
+  const start = max * knee;
+  if (raw <= start) return raw;
+  const room = max - start;
+  return start + room * (1 - Math.exp(-(raw - start) / room));
 }
 
 function mentalPerformance(mental: number): number {
@@ -364,17 +391,24 @@ export function goalShare(attributes: Attributes, playStyle: PlayStyle, mental: 
   const style = getPlayStyle(playStyle);
   if (style.goalShare === 0) return 0;
   const composite = weightedScore(attributes, style.scoringProfile);
-  return Math.min(
+  return softCap(
     style.goalShare * shareFactor(composite, teamPower) * mentalPerformance(mental),
-    SIM_CONFIG.individual.maxGoalShare,
+    goalShareCap(teamPower),
   );
+}
+
+/** 득점 점유율 상한: 팀 실력 70 이하 0.27 → 90 이상 0.37 */
+export function goalShareCap(teamPower: number): number {
+  const { maxGoalShare, eliteGoalShareBonus, eliteTeamPower } = SIM_CONFIG.individual;
+  const [low, high] = eliteTeamPower;
+  return maxGoalShare + eliteGoalShareBonus * clamp((teamPower - low) / (high - low), 0, 1);
 }
 
 /** 도움 점유율: 도움이 기록되는 골 1개를 이 선수가 도울 확률 (creatingProfile 기반) */
 export function assistShare(attributes: Attributes, playStyle: PlayStyle, mental: number, teamPower: number): number {
   const style = getPlayStyle(playStyle);
   const composite = weightedScore(attributes, style.creatingProfile);
-  return Math.min(
+  return softCap(
     style.assistShare * shareFactor(composite, teamPower) * mentalPerformance(mental),
     SIM_CONFIG.individual.maxAssistShare,
   );
@@ -385,8 +419,8 @@ function npcShares(position: Position, playStyle: PlayStyle, ovr: number, teamPo
   const style = getPlayStyle(playStyle);
   const factor = shareFactor(ovr, teamPower);
   return {
-    goal: Math.min(style.goalShare * factor, SIM_CONFIG.individual.maxGoalShare),
-    assist: Math.min(style.assistShare * factor, SIM_CONFIG.individual.maxAssistShare),
+    goal: softCap(style.goalShare * factor, goalShareCap(teamPower)),
+    assist: softCap(style.assistShare * factor, SIM_CONFIG.individual.maxAssistShare),
   };
 }
 
@@ -412,6 +446,8 @@ export interface RatingInput {
   result: 'W' | 'D' | 'L';
   saves: number;
   cleanSheet: boolean;
+  /** 키패스 (도움 포함) */
+  keyPasses?: number;
   /** 표준정규분포 표본 (호출 측의 개인 기록 스트림에서 뽑는다) */
   noise: number;
   /** 하이라이트 선택지 보너스 */
@@ -430,9 +466,13 @@ export function calculateMatchRating(input: RatingInput): number {
   const defence = defensiveRole(input.role.position);
 
   let rating = r.base;
-  rating += r.involvementWeight * clamp((involvement - input.teamPower) / 10, -2, 2);
+  const control = clamp((involvement - input.teamPower) / 10, -2, 2);
+  // 팀 수준을 웃도는 미드필더만 경기 장악 보너스를 더 받는다
+  const midfieldDominant = control > 0 && POSITION_META[input.role.position].group === 'MIDFIELDER';
+  rating += (midfieldDominant ? r.midfieldInvolvementWeight : r.involvementWeight) * control;
   if (input.goals > 0) rating += r.firstGoal + r.extraGoal * (input.goals - 1);
   rating += r.assist * input.assists;
+  rating += r.keyPass * Math.max(0, (input.keyPasses ?? 0) - input.assists);
   rating += input.result === 'W' ? r.win : input.result === 'L' ? r.loss : 0;
   if (defence) {
     if (input.cleanSheet) rating += r.cleanSheet[defence];
@@ -484,6 +524,8 @@ export function calculateReputationDelta(params: {
   goals: number;
   assists: number;
   cleanSheets: number;
+  /** 키패스 (도움 포함). 골이 적은 플레이메이커도 경기 장악으로 이름을 알린다 */
+  keyPasses?: number;
   leagueStrength: number;
   trophyBonus: number;
   highlightBonus: number;
@@ -494,7 +536,8 @@ export function calculateReputationDelta(params: {
   } else {
     const playFactor = Math.min(1, params.appearances / Math.max(1, params.eligibleMatches * 0.8));
     const performance = (params.averageRating - 6.6) * 4 * playFactor;
-    const output = (params.goals + params.assists * 0.7 + params.cleanSheets * 0.4) * 0.12;
+    const creation = Math.max(0, (params.keyPasses ?? 0) - params.assists) * 0.15;
+    const output = (params.goals + params.assists * 0.7 + params.cleanSheets * 0.4 + creation) * 0.12;
     delta = (performance + output) * leagueReputationWeight(params.leagueStrength);
   }
   delta += params.trophyBonus + params.highlightBonus;
@@ -534,9 +577,11 @@ export function mergeStatLines(...lines: PlayerStatLine[]): PlayerStatLine {
       assists: acc.assists + line.assists,
       cleanSheets: acc.cleanSheets + line.cleanSheets,
       saves: acc.saves + line.saves,
+      // 키패스 도입 전 세이브와 섞여도 NaN이 되지 않게
+      keyPasses: acc.keyPasses + (line.keyPasses ?? 0),
       ratingSum: acc.ratingSum + line.ratingSum,
     }),
-    { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, saves: 0, ratingSum: 0 },
+    { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, saves: 0, keyPasses: 0, ratingSum: 0 },
   );
 }
 
@@ -582,6 +627,7 @@ function addPlayerLine(line: PlayerStatLine, match: PlayerMatchLine) {
   line.assists += match.assists;
   line.cleanSheets += match.cleanSheet ? 1 : 0;
   line.saves += match.saves;
+  line.keyPasses = (line.keyPasses ?? 0) + match.keyPasses;
   line.ratingSum += match.rating;
 }
 
@@ -1208,6 +1254,13 @@ function playTeamFixture(s: TurnSession, fixture: Fixture, highlight: { outcome:
     const defence = defensiveRole(role.position);
     const playerGoals = tally.playerGoals + extraTally.playerGoals + (effect?.playerGoals ?? 0);
     const playerAssists = tally.playerAssists + extraTally.playerAssists + (effect?.playerAssists ?? 0);
+    // 키패스: 기대 도움 ÷ 전환율. 다른 기록과 섞이지 않도록 별도 스트림을 쓴다.
+    const myLambda = (side === 'HOME' ? raw.lambdaHome : raw.lambdaAway) / scale;
+    const expectedAssists =
+      (playerShares?.assist ?? 0) * SIM_CONFIG.individual.assistedGoalRatio * myLambda * (participation.minutes / 90);
+    const keyPasses =
+      playerAssists +
+      rngFor(s.seed, fixture.id, 'key-pass').poisson(expectedAssists * (1 / SIM_CONFIG.individual.keyPassConversion - 1));
     const cleanSheet = defence !== null && participation.started && participation.minutes >= 60 && conceded === 0;
     const opponentLambda = side === 'HOME' ? raw.lambdaAway : raw.lambdaHome;
     const keeperQuality = 0.8 + (weightedScore(attributes, { reflexes: 2, gkPositioning: 1 }) / 100) * 0.4;
@@ -1230,6 +1283,7 @@ function playTeamFixture(s: TurnSession, fixture: Fixture, highlight: { outcome:
       result,
       saves,
       cleanSheet,
+      keyPasses,
       noise: individualRng.normal(0, 1),
       bonus: effect?.ratingBonus,
     });
@@ -1255,6 +1309,7 @@ function playTeamFixture(s: TurnSession, fixture: Fixture, highlight: { outcome:
       assists: playerAssists,
       cleanSheet,
       saves,
+      keyPasses,
       rating,
       conditionAfter: Math.round(s.condition),
     };
@@ -1590,6 +1645,7 @@ export function finalizeTurn(session: TurnSession): TurnResult {
     goals: competitive.goals,
     assists: competitive.assists,
     cleanSheets: competitive.cleanSheets,
+    keyPasses: competitive.keyPasses,
     leagueStrength: s.leagueStrength,
     trophyBonus,
     highlightBonus: s.highlightEffects.reputation,

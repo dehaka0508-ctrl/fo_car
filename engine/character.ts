@@ -148,7 +148,7 @@ export function determineInitialSquadStatus(
 }
 
 export function emptyStatLine(): PlayerStatLine {
-  return { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, saves: 0, ratingSum: 0 };
+  return { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, saves: 0, keyPasses: 0, ratingSum: 0 };
 }
 
 export function emptyStatsByCompetition(): Record<CompetitionType, PlayerStatLine> {

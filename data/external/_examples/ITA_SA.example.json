@@ -1,0 +1,73 @@
+{
+  "league": "ITA_SA",
+  "season": "2025/26",
+  "clubs": [
+    {
+      "id": "inter",
+      "name": "Inter",
+      "nameKo": "인테르",
+      "shortName": "INT",
+      "power": 86,
+      "prestige": 88,
+      "finance": 84,
+      "kitColors": { "primary": "#0068A8", "secondary": "#000000" },
+      "rivals": ["milan", "juventus"],
+      "legends": [
+        { "name": "하비에르 사네티", "position": "RB", "nationality": "ARG", "era": "1995–2014" },
+        { "name": "주세페 메아차", "position": "ST", "nationality": "ITA", "era": "1927–1940" },
+        { "name": "자친토 파케티", "position": "DF", "nationality": "ITA", "era": "1960–1978" }
+      ],
+      "records": [{ "category": "APPEARANCES", "holder": "하비에르 사네티", "value": 858 }]
+    },
+    {
+      "id": "milan",
+      "name": "AC Milan",
+      "nameKo": "AC 밀란",
+      "shortName": "MIL",
+      "power": 82,
+      "prestige": 90,
+      "finance": 80,
+      "kitColors": { "primary": "#FB090B", "secondary": "#000000" },
+      "rivals": ["Inter"],
+      "legends": [{ "name": "파올로 말디니", "position": "CB", "era": "1985–2009" }, { "name": "이름 없는 항목" }]
+    },
+    {
+      "id": "juventus",
+      "name": "Juventus",
+      "nameKo": "유벤투스",
+      "power": 83,
+      "prestige": 89,
+      "finance": 85,
+      "kitColors": { "primary": "#000000", "secondary": "#FFFFFF" },
+      "rivals": ["inter", "torino"]
+    },
+    {
+      "id": "napoli",
+      "name": "Napoli",
+      "nameKo": "나폴리",
+      "power": 84,
+      "prestige": 80,
+      "finance": 76,
+      "kitColors": { "primary": "#12A0D7", "secondary": "" },
+      "legends": null
+    },
+    {
+      "name": "AS Roma",
+      "nameKo": "AS 로마",
+      "strength": 79,
+      "reputation": 80,
+      "budget": 72,
+      "primaryColor": "8E1F2F",
+      "secondaryColor": ""
+    },
+    {
+      "id": "atalanta",
+      "name": "Atalanta",
+      "nameKo": "아탈란타",
+      "power": 81,
+      "prestige": 74,
+      "finance": 70,
+      "colors": ["#1E71B8", "#000000"]
+    }
+  ]
+}

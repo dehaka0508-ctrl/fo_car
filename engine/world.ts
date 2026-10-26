@@ -1,10 +1,8 @@
 /**
  * 시뮬레이션 월드: 정적 데이터(data/) + 구단 동적 상태(ClubState)
  */
-import { CLUBS } from '@/data/clubs';
 import { COMPETITIONS } from '@/data/competitions';
-import { CLUB_LEGENDS, HISTORIC_RECORDS } from '@/data/legends';
-import { LEAGUES } from '@/data/leagues';
+import { DATABASE } from '@/data/database';
 import { NATIONS } from '@/data/nations';
 import type {
   ClubDefinition,
@@ -63,15 +61,16 @@ export function createInitialClubStates(
   return states;
 }
 
+/** 내장 샘플 + 외부 DB(data/external/)를 합친 데이터베이스로 월드를 만든다 */
 export function createDefaultWorld(): SimulationWorld {
   return {
-    leagues: LEAGUES,
-    clubs: CLUBS,
+    leagues: DATABASE.leagues,
+    clubs: DATABASE.clubs,
     nations: NATIONS,
     competitions: COMPETITIONS,
-    clubStates: createInitialClubStates(LEAGUES, CLUBS),
-    legends: CLUB_LEGENDS,
-    records: HISTORIC_RECORDS,
+    clubStates: createInitialClubStates(DATABASE.leagues, DATABASE.clubs),
+    legends: DATABASE.legends,
+    records: DATABASE.records,
   };
 }
 

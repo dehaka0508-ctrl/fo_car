@@ -11,8 +11,10 @@
  *
  * 모든 함수는 GameState를 받아 새 GameState를 돌려주는 순수 함수다 (Zustand 스토어가 그대로 호출).
  */
+import { DATABASE } from '@/data/database';
 import type { GameState, HighlightOutcome, TurnPhase, TurnPointer, TurnResult } from '@/types/game';
 import { createPlayer, type CharacterInput } from './character';
+import { syncSaveWithDatabase } from './dbSync';
 import { applyMatchExperience } from './growth';
 import { buildAutoHighlightOutcome } from './highlight';
 import { beginInterTurn, interTurnBlockers } from './interTurn';
@@ -48,6 +50,11 @@ export function worldOf(state: GameState): SimulationWorld {
   return worldWithClubStates(BASE_WORLD, state.clubs);
 }
 
+/** 구단 DB가 세이브를 만든 뒤 바뀌었으면 맞춘다 (턴 사이에만 호출) */
+export function syncWithDatabase(state: GameState): GameState {
+  return syncSaveWithDatabase(state, BASE_WORLD, DATABASE.signature);
+}
+
 // ============================================================================
 // 커리어 생성
 // ============================================================================
@@ -58,6 +65,7 @@ export function createCareer(input: CharacterInput, options: { seed: number; sta
   const player = createPlayer(input, world, { seed: options.seed, startSeason });
   let state: GameState = {
     saveVersion: SAVE_VERSION,
+    dbSignature: DATABASE.signature,
     seed: options.seed,
     turn: { season: startSeason, phase: 'FIRST_HALF' },
     stage: 'READY',

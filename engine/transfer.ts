@@ -24,6 +24,7 @@ import type {
   TurnPointer,
 } from '@/types/game';
 import { PLAYING_TIME_LABELS } from '@/data/labels';
+import { areNeighbors } from '@/data/regions';
 import { determineInitialSquadStatus } from './character';
 import { simulateFirstHalfTable } from './league';
 import { evaluateDeparture } from './records';
@@ -322,7 +323,7 @@ function clubInterest(state: GameState, world: SimulationWorld, clubId: ID, mode
     const enoughTime = isBetterOrEqual(expected, isGK ? 'GK_SECOND' : 'ROTATION');
     if (!enoughTime || cs.power > player.ovr + 4 || cs.power < player.ovr - 10) return 0;
     // 임대는 원소속팀 국가의 구단이 압도적으로 많다
-    return (fit + 0.05) * locality(state, world, clubId) ** 1.6;
+    return (fit + 0.05) * locality(state, world, clubId, 'LOAN') ** 1.4;
   }
 
   const prospect = player.age <= 20;
@@ -344,15 +345,57 @@ function clubInterest(state: GameState, world: SimulationWorld, clubId: ID, mode
   return fit * prestigeFactor * money * partnerBonus * locality(state, world, clubId);
 }
 
-/** 명성이 낮을 때는 자국·같은 대륙 구단이 주로 관심을 보인다 */
-function locality(state: GameState, world: SimulationWorld, clubId: ID): number {
-  if (state.player.reputation >= 50) return 1;
-  const currentClub = state.player.contract?.clubId ?? state.player.parentContract?.clubId;
-  const homeNation = currentClub ? world.clubs[currentClub].nation : state.player.profile.nationality;
+/**
+ * 지역성 가중치 설정.
+ * 유망주(16~21세)와 명성이 낮은 선수는 같은 나라(하부 리그 포함) → 인접국 → 같은 대륙 → 다른 대륙 순으로
+ * 관심을 받는다. 명성이 높아질수록 차이가 옅어져 세계 어디서든 오퍼가 온다.
+ */
+export const LOCALITY_CONFIG = {
+  prospectMaxAge: 21,
+  /** 이 명성부터 지역성 효과가 줄기 시작해 fullReputation에서 사라진다 */
+  fadeStartReputation: 35,
+  fullReputation: 65,
+  weights: { SAME_NATION: 3.2, NEIGHBOR: 1.6, SAME_CONFEDERATION: 0.7, ELSEWHERE: 0.12 },
+  /** 현 소속 국가가 아닌 '국적' 국가에 대한 가중치 비율 (해외 유학 유망주의 귀국 오퍼) */
+  nationalityShare: 0.6,
+  /** 임대: 같은 나라 하위 리그 구단 추가 가중 */
+  loanLowerTierBonus: 1.5,
+} as const;
+
+export type Proximity = keyof typeof LOCALITY_CONFIG.weights;
+
+export function proximity(world: SimulationWorld, from: string, clubId: ID): Proximity {
   const club = world.clubs[clubId];
-  if (club.nation === homeNation) return 2.5;
-  const homeConf = currentClub ? world.leagues[world.clubStates[currentClub].leagueId].confederation : world.nations[homeNation]?.confederation;
-  return world.leagues[world.clubStates[clubId].leagueId].confederation === homeConf ? 1.2 : 0.5;
+  if (club.nation === from) return 'SAME_NATION';
+  if (areNeighbors(from, club.nation)) return 'NEIGHBOR';
+  const fromConf = world.nations[from]?.confederation;
+  const clubConf = world.leagues[world.clubStates[clubId].leagueId]?.confederation;
+  return fromConf && fromConf === clubConf ? 'SAME_CONFEDERATION' : 'ELSEWHERE';
+}
+
+/** 지역성 가중치 (1 = 영향 없음) */
+export function locality(state: GameState, world: SimulationWorld, clubId: ID, mode: 'TRANSFER' | 'LOAN' = 'TRANSFER'): number {
+  const c = LOCALITY_CONFIG;
+  const { player } = state;
+  const prospect = player.age <= c.prospectMaxAge;
+  const fade = clamp((c.fullReputation - player.reputation) / (c.fullReputation - c.fadeStartReputation), 0, 1);
+  const strength = prospect ? Math.max(fade, 0.75) : fade;
+  if (strength <= 0) return 1;
+
+  const currentClub = player.contract?.clubId ?? player.parentContract?.clubId;
+  const base = currentClub ? world.clubs[currentClub]?.nation : undefined;
+  const nationality = player.profile.nationality;
+  const fromBase = base ? c.weights[proximity(world, base, clubId)] : 0;
+  const fromNationality = c.weights[proximity(world, nationality, clubId)] * (base && base !== nationality ? c.nationalityShare : 1);
+  let weight = Math.max(fromBase, fromNationality);
+
+  // 임대는 같은 나라의 한 단계 아래 리그로 많이 간다
+  if (mode === 'LOAN' && base && world.clubs[clubId].nation === base && currentClub) {
+    const fromTier = world.leagues[world.clubStates[currentClub].leagueId]?.tier ?? 1;
+    const toTier = world.leagues[world.clubStates[clubId].leagueId]?.tier ?? 1;
+    if (toTier > fromTier) weight *= c.loanLowerTierBonus;
+  }
+  return 1 + (weight - 1) * strength;
 }
 
 function pickClub(
@@ -786,10 +829,21 @@ export function processContractExpiry(state: GameState, world: SimulationWorld):
   });
 }
 
-/** 오퍼 매력도 (자동 진행 정책·UI 추천용) */
+/** 대륙 최상위 클럽 대회 (야망 있는 선수가 노리는 무대) */
+const TOP_CONTINENTAL_IDS = new Set(['UEFA_CL', 'CONMEBOL_LIB', 'AFC_CL', 'CAF_CL', 'CONCACAF_CC']);
+
+/**
+ * 오퍼 매력도 (자동 진행 정책·UI 추천용)
+ * 정상급(OVR 78+)이고 31세 이하인 선수는 출전 시간 경쟁을 감수하고 강팀·대륙 대회 진출 팀을 더 선호한다.
+ */
 export function offerAttractiveness(state: GameState, world: SimulationWorld, offer: TransferOffer): number {
   const cs = world.clubStates[offer.clubId];
-  const roleScore = (4 - playingTimeRank(offer.terms.playingTime)) * 12;
+  const { player } = state;
+  const ambition = clamp((player.ovr - 78) / 8, 0, 1) * (player.age <= 31 ? 1 : 0.3);
+  const roleScore = (4 - playingTimeRank(offer.terms.playingTime)) * 12 * (1 - 0.4 * ambition);
   const wageScore = Math.log10(Math.max(offer.terms.wage, 1_000)) * 4;
-  return roleScore + cs.prestige * 0.5 + cs.power * 0.6 + wageScore + (offer.partnerNpcId ? 6 : 0);
+  const continental = cs.continentalCompetitionId
+    ? (TOP_CONTINENTAL_IDS.has(cs.continentalCompetitionId) ? 10 * (world.competitions[cs.continentalCompetitionId]?.prestige ?? 50) / 100 : 3) * ambition
+    : 0;
+  return roleScore + cs.prestige * 0.5 + cs.power * (0.6 + 0.3 * ambition) + continental + wageScore + (offer.partnerNpcId ? 6 : 0);
 }

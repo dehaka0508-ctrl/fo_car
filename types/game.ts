@@ -355,6 +355,10 @@ export interface LeagueDefinition {
   continentalSlots: ContinentalSlot[];
   /** 자본 리그: 명성이 낮아도 재정으로 고연봉 오퍼를 보낸다 (사우디, MLS 등) */
   moneyLeague?: boolean;
+  /** 기본 슬롯: 정규 참가 구단 수 (외부 DB 검증용) */
+  teamCount?: number;
+  /** 외부 DB가 리그를 가리킬 때 쓸 수 있는 다른 표기 (예: 'Serie A', 'ITA1') */
+  aliases?: string[];
 }
 
 export interface ClubLegend {
@@ -510,6 +514,8 @@ export interface PlayerMatchLine {
   assists: number;
   cleanSheet: boolean;
   saves: number;
+  /** 슈팅으로 이어진 결정적 패스 (도움 포함) */
+  keyPasses: number;
   rating: number;
   conditionAfter: number;
 }
@@ -542,6 +548,8 @@ export interface PlayerStatLine {
   assists: number;
   cleanSheets: number;
   saves: number;
+  /** 키패스 (도움 포함) */
+  keyPasses: number;
   /** 평균 평점 = ratingSum / appearances */
   ratingSum: number;
 }
@@ -1045,6 +1053,8 @@ export interface RetirementSummary {
 
 export interface GameState {
   saveVersion: number;
+  /** 세이브를 만든(마지막으로 맞춘) 구단 DB 서명. 다르면 engine/dbSync.ts가 동기화한다. */
+  dbSignature?: string;
   seed: number;
   /** 다음에 진행할 턴 */
   turn: TurnPointer;

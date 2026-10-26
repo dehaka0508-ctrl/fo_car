@@ -5,10 +5,11 @@ import { BASE_WORLD } from '@/engine/career';
 import { careerTotals } from '@/engine/records';
 import { averageRating, mergeStatLines } from '@/engine/simulator';
 import type { GameState } from '@/types/game';
+import { CareerShareCard } from '../CareerShareCard';
 import { clubLabel, competitionName, ratingText, seasonLabel } from '../format';
 import { Card, Stat, Tag } from '../ui';
 
-export function RecordsTab({ game }: { game: GameState }) {
+export function RecordsTab({ game, showShare = true }: { game: GameState; showShare?: boolean }) {
   const totals = careerTotals(game);
   const { nationalTeam } = game.player;
   const titles = game.awards.filter((a) => a.rank === 1);
@@ -16,6 +17,7 @@ export function RecordsTab({ game }: { game: GameState }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {showShare ? <CareerShareCard game={game} /> : null}
       <Card title="통산 기록 (공식전)">
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
           <Stat label="출전" value={totals.appearances} />

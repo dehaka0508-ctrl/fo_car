@@ -14,6 +14,7 @@ import {
   createCareer,
   retire as retireCareer,
   startTurn as startCareerTurn,
+  syncWithDatabase,
   worldOf,
 } from '@/engine/career';
 import type { CharacterInput } from '@/engine/character';
@@ -83,7 +84,8 @@ export const useGameStore = create<GameStore>()(
       const finish = (session: TurnSession) => {
         const game = get().game;
         if (!game) return;
-        set({ game: completeTurn(game, session), session: null, highlightPicks: [] });
+        // 턴이 끝난 뒤에는 구단 DB 변경도 반영한다 (진행 중인 턴에는 손대지 않는다)
+        set({ game: syncWithDatabase(completeTurn(game, session)), session: null, highlightPicks: [] });
       };
 
       return {
@@ -185,6 +187,12 @@ export const useGameStore = create<GameStore>()(
       partialize: ({ game, session, highlightPicks, ackedPopups }) => ({ game, session, highlightPicks, ackedPopups }),
       // 이전 버전 세이브는 구조가 달라 새로 시작한다
       migrate: () => ({ game: null, session: null, highlightPicks: [], ackedPopups: [] }),
+      // 세이브를 불러올 때 구단 DB(data/external/)가 바뀌었으면 맞춘다 (턴 진행 중이면 턴이 끝난 뒤)
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<GameStore>;
+        const game = saved.game && !saved.session && saved.game.stage === 'READY' ? syncWithDatabase(saved.game) : (saved.game ?? null);
+        return { ...current, ...saved, game };
+      },
     },
   ),
 );

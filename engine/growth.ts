@@ -18,6 +18,7 @@ import {
   type CompetitionType,
   type PlayerState,
   type PlayerStatLine,
+  type PlayStyle,
   type StatCategory,
   type TrainingIntensity,
   type TrainingPlan,
@@ -45,6 +46,19 @@ export const GROWTH_CONFIG = {
   experience: {
     reserveWeight: 0.6,
     friendlyWeight: 0.3,
+  },
+  /**
+   * 스타일 간 성장 속도 보정.
+   * OVR 가중치가 여러 능력치에 퍼진 스타일(박스 투 박스·인사이드 포워드)은 같은 훈련·경험으로도
+   * OVR이 덜 오른다. 이를 맞추지 않으면 포처·스토퍼만 최고 OVR이 5~7 높아진다.
+   */
+  styleBalance: {
+    /** 훈련 효율 = 기준 비중 ÷ (상위 2개 가중치 비중) */
+    referenceTopShare: 0.5,
+    trainingMin: 0.85,
+    trainingMax: 1.6,
+    /** 경험·자연 성장 1포인트가 OVR로 이어지는 비율 (모든 스타일 동일) */
+    growthOvrRate: 0.72,
   },
 } as const;
 
@@ -96,6 +110,30 @@ export function roleWeights(player: PlayerState): Partial<Record<AttributeKey, n
   return Object.fromEntries(Object.entries(weights).map(([key, w]) => [key, (w ?? 0) / max]));
 }
 
+/** 같은 훈련으로 오르는 OVR이 스타일마다 비슷해지도록 하는 훈련 효율 배율 */
+export function styleTrainingEfficiency(playStyle: PlayStyle): number {
+  const b = GROWTH_CONFIG.styleBalance;
+  const weights = Object.values(getPlayStyle(playStyle).ovrWeights)
+    .map((w) => w ?? 0)
+    .sort((a, c) => c - a);
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  const topShare = (weights[0] + (weights[1] ?? 0)) / total;
+  return clamp(b.referenceTopShare / topShare, b.trainingMin, b.trainingMax);
+}
+
+/**
+ * 경기 경험·자연 성장의 능력치별 배분.
+ * 가중치에 비례해 나누되, 어느 스타일이든 성장 1포인트가 OVR을 같은 만큼 올리도록 정규화한다.
+ */
+export function growthShares(player: PlayerState): Partial<Record<AttributeKey, number>> {
+  const weights = getPlayStyle(player.profile.role.playStyle).ovrWeights;
+  const values = Object.values(weights).map((w) => w ?? 0);
+  const total = values.reduce((sum, w) => sum + w, 0);
+  const squares = values.reduce((sum, w) => sum + w * w, 0);
+  const scale = (GROWTH_CONFIG.styleBalance.growthOvrRate * total) / squares;
+  return Object.fromEntries(Object.entries(weights).map(([key, w]) => [key, (w ?? 0) * scale]));
+}
+
 function applyDeltas(
   player: PlayerState,
   deltas: Partial<Record<AttributeKey, number>>,
@@ -129,7 +167,8 @@ export function expectedTrainingGain(player: PlayerState, key: AttributeKey): nu
     GROWTH_CONFIG.training.focusedBase[2] *
     trainingAgeFactor(player.age) *
     levelFactor(player.attributes[key]) *
-    focusMultiplier(player, key)
+    focusMultiplier(player, key) *
+    styleTrainingEfficiency(player.profile.role.playStyle)
   );
 }
 
@@ -155,7 +194,7 @@ export function previewTraining(player: PlayerState, plan: TrainingPlan): Traini
     return { gains: {}, weightDelta: 0, conditionDelta: t.rest.condition, mentalDelta: t.rest.mental };
   }
   const intensity = t.intensity[plan.intensity];
-  const age = trainingAgeFactor(player.age);
+  const age = trainingAgeFactor(player.age) * styleTrainingEfficiency(player.profile.role.playStyle);
   const gains: Partial<Record<AttributeKey, number>> = {};
   let weightDelta = 0;
 
@@ -251,7 +290,7 @@ export function applyMatchExperience(
   if (points <= 0) return { player, deltas: {} };
 
   const expected: Partial<Record<AttributeKey, number>> = {};
-  for (const [key, weight] of Object.entries(roleWeights(player)) as Array<[AttributeKey, number]>) {
+  for (const [key, weight] of Object.entries(growthShares(player)) as Array<[AttributeKey, number]>) {
     expected[key] = points * weight * levelFactor(player.attributes[key]);
   }
   const deltas = roundDeltas(rng, expected);
@@ -311,7 +350,7 @@ export function applySeasonalAging(player: PlayerState, rng: Rng): AgingResult {
   const growth = naturalGrowth(player.age);
   const newAge = player.age + 1;
   const decline = declineProfile(newAge, isGK);
-  const weights = roleWeights(player);
+  const weights = growthShares(player);
   const expected: Partial<Record<AttributeKey, number>> = {};
   const shielded: Partial<Record<AttributeKey, number>> = {};
 

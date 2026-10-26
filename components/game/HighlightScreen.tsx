@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { PlayerToken } from '@/components/Avatar';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Avatar, PlayerToken } from '@/components/Avatar';
 import { ATTRIBUTE_META } from '@/data/attributes';
 import { HAIR_COLORS, SKIN_TONES } from '@/data/appearance';
 import { HIGHLIGHT_KIND_LABELS } from '@/data/labels';
@@ -10,6 +10,7 @@ import { buildHighlightScene, optionSuccessChance } from '@/engine/highlight';
 import { kitColorsFor } from '@/engine/world';
 import { useGameStore } from '@/store/gameStore';
 import type { KitColors, MatchSituation, MatchToken, ResolvedSituation } from '@/types/game';
+import { BALL, buildChoreography, positionAt, trailPoints, type Choreography, type Effect, type Point } from './highlight/choreography';
 import { Button, Card, cx, Tag } from './ui';
 
 const RESULT_TEXT: Record<ResolvedSituation['kind'], [string, string]> = {
@@ -21,38 +22,83 @@ const RESULT_TEXT: Record<ResolvedSituation['kind'], [string, string]> = {
   SAVE: ['슈퍼 세이브!', '막지 못했다… 실점.'],
 };
 
-/** 판정 후 공이 향할 곳 */
-function ballTarget(situation: MatchSituation, resolved: ResolvedSituation | undefined) {
-  if (!resolved) return situation.ball;
-  const me = situation.tokens.find((t) => t.tag === 'PROTAGONIST')!;
-  const nearestOpponent = situation.tokens
-    .filter((t) => t.side !== me.side)
-    .sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
-  switch (resolved.kind) {
-    case 'SHOT':
-    case 'SET_PIECE':
-    case 'KEY_PASS':
-      return resolved.success ? { x: 99, y: 50 } : { x: nearestOpponent?.x ?? 95, y: nearestOpponent?.y ?? 50 };
-    case 'DRIBBLE':
-      return resolved.success ? { x: Math.min(95, me.x + 14), y: me.y } : { x: nearestOpponent?.x ?? me.x, y: nearestOpponent?.y ?? me.y };
-    case 'DEFEND':
-      return resolved.success ? { x: Math.min(60, me.x + 22), y: me.y } : { x: 1, y: 50 };
-    case 'SAVE':
-      return resolved.success ? { x: me.x + 1, y: me.y } : { x: 0.5, y: 50 };
-  }
+/** 피치 SVG 좌표: 가로 150 × 세로 100 (바둑돌 좌표 0~100을 가로로 1.5배) */
+const X = (x: number) => x * 1.5;
+/** 골라인: 양 끝 여백(0~4, 146~150)에 골망을 그린다 */
+const GOAL_LINE_OURS = 4;
+const GOAL_LINE_THEIRS = 146;
+
+// ----------------------------------------------------------------------------
+// 재생
+// ----------------------------------------------------------------------------
+
+function subscribeReducedMotion(callback: () => void) {
+  const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+  query.addEventListener('change', callback);
+  return () => query.removeEventListener('change', callback);
 }
 
-function TokenDot({ token, kit, moved }: { token: MatchToken; kit: KitColors | null; moved: { x: number; y: number } | null }) {
+/** 운영체제의 '동작 줄이기' 설정 */
+function useReducedMotion(): boolean {
+  return useSyncExternalStore(
+    subscribeReducedMotion,
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    () => false,
+  );
+}
+
+/** 각본을 0ms부터 끝까지 재생한다. 끝나면 onDone. */
+function usePlayback(choreo: Choreography | null, skip: boolean, onDone: () => void): number {
+  const reduced = useReducedMotion();
+  const [t, setT] = useState(0);
+  const done = useRef(onDone);
+  useEffect(() => {
+    done.current = onDone;
+  });
+  const instant = reduced || skip;
+
+  useEffect(() => {
+    if (!choreo) return;
+    if (instant) {
+      const id = requestAnimationFrame(() => done.current());
+      return () => cancelAnimationFrame(id);
+    }
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      setT(Math.min(elapsed, choreo.duration));
+      if (elapsed < choreo.duration) frame = requestAnimationFrame(tick);
+      else done.current();
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [choreo, instant]);
+
+  if (!choreo) return 0;
+  return instant ? choreo.duration : t;
+}
+
+/** 효과의 진행도 0~1 (아직이면 null) */
+function progress(effect: Effect, t: number): number | null {
+  if (t < effect.at || t > effect.at + effect.duration) return null;
+  return (t - effect.at) / effect.duration;
+}
+
+// ----------------------------------------------------------------------------
+// 피치
+// ----------------------------------------------------------------------------
+
+function TokenDot({ token, kit, at }: { token: MatchToken; kit: KitColors | null; at: Point }) {
   const isMe = token.tag === 'PROTAGONIST';
   const fill = isMe && token.appearance ? SKIN_TONES[token.appearance.skin].color : (kit?.primary ?? '#a1a1aa');
   const ring = isMe && token.appearance ? HAIR_COLORS[token.appearance.hair].color : (kit?.secondary ?? '#18181b88');
-  const position = moved ?? token;
   const badge =
     token.tag === 'RIVAL' ? 'bg-rose-600' : token.tag === 'FORMER_PARTNER' ? 'bg-violet-600' : token.tag === 'PARTNER' ? 'bg-amber-500' : 'bg-zinc-900/70';
   return (
     <div
-      className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-all duration-700 ease-out"
-      style={{ left: `${position.x}%`, top: `${position.y}%` }}
+      className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+      style={{ left: `${at.x}%`, top: `${at.y}%`, zIndex: isMe ? 3 : 2 }}
     >
       {token.label ? (
         <span className={cx('mb-0.5 max-w-24 truncate rounded px-1 text-[10px] font-semibold text-white', isMe ? 'bg-emerald-700' : badge)}>
@@ -60,58 +106,229 @@ function TokenDot({ token, kit, moved }: { token: MatchToken; kit: KitColors | n
           {token.label}
         </span>
       ) : null}
-      <svg viewBox="0 0 20 20" className={isMe ? 'h-7 w-7 drop-shadow' : 'h-5 w-5'} aria-hidden="true">
-        <circle cx="10" cy="10" r="8" fill={fill} stroke={ring} strokeWidth={isMe ? 3.5 : 2.5} />
+      <svg viewBox="0 0 22 22" className={isMe ? 'h-8 w-8 drop-shadow' : 'h-6 w-6'} aria-hidden="true">
+        {/* 잔디와 비슷한 색 유니폼도 보이도록 흰 테두리 */}
+        <circle cx="11" cy="11" r="9.6" fill="none" stroke="#ffffff" strokeOpacity={0.9} strokeWidth={1.2} />
+        <circle cx="11" cy="11" r="7.6" fill={fill} stroke={ring} strokeWidth={isMe ? 3.2 : 2.2} />
       </svg>
     </div>
   );
 }
 
+/** 골라인(x=4 / 146) 바깥 여백에 그리는 골망. 공이 들어가면 바깥으로 부풀었다 돌아온다. */
+function Net({ side, bulge }: { side: 'THEIRS' | 'OURS'; bulge: number }) {
+  const line = side === 'THEIRS' ? GOAL_LINE_THEIRS : GOAL_LINE_OURS;
+  const dir = side === 'THEIRS' ? 1 : -1;
+  const depth = 2.6 + bulge * 1.3;
+  const back = line + dir * depth;
+  const rows = [43, 45.8, 48.6, 51.4, 54.2, 57];
+  const cols = [0.33, 0.66];
+  return (
+    <g fill="none">
+      <rect x={Math.min(line, back)} y={43} width={depth} height={14} fill="#ffffff" fillOpacity={0.12 + bulge * 0.2} />
+      <g stroke="#ffffff" strokeOpacity={0.7} strokeWidth={0.22}>
+        {rows.map((y) => {
+          const wobble = bulge * Math.sin(((y - 43) / 14) * Math.PI) * 1.1;
+          return <line key={y} x1={line} y1={y} x2={back + dir * wobble} y2={y} />;
+        })}
+        {cols.map((c) => {
+          const x = line + dir * depth * c;
+          return <line key={c} x1={x} y1={43} x2={x + dir * bulge * c} y2={57} />;
+        })}
+      </g>
+      <path d={`M${line} 43 L${back} 43 L${back} 57 L${line} 57`} stroke="#ffffff" strokeWidth={0.7} />
+    </g>
+  );
+}
+
 function Pitch({
+  situation,
+  choreo,
+  t,
+  myKit,
+  theirKit,
+}: {
+  situation: MatchSituation;
+  choreo: Choreography | null;
+  t: number;
+  myKit: KitColors | null;
+  theirKit: KitColors | null;
+}) {
+  const me = situation.tokens.find((tok) => tok.tag === 'PROTAGONIST')!;
+  const effects = choreo?.effects ?? [];
+  const active = effects.map((effect) => ({ effect, p: progress(effect, t) })).filter((e) => e.p !== null) as Array<{ effect: Effect; p: number }>;
+  const ball = (choreo && positionAt(choreo, BALL, t)) ?? situation.ball;
+  const netBulge = (goal: 'THEIRS' | 'OURS') => {
+    const net = active.find((a) => a.effect.kind === 'NET' && a.effect.goal === goal);
+    return net ? Math.sin(Math.min(1, net.p * 2.2) * Math.PI) * (1 - net.p * 0.5) : 0;
+  };
+  const shake = active.find((a) => a.effect.kind === 'NET');
+  const shakeX = shake ? Math.sin(t / 22) * 4 * Math.max(0, 1 - shake.p * 2.5) : 0;
+
+  return (
+    <div
+      className="relative aspect-[3/2] w-full overflow-hidden rounded-xl bg-emerald-700 shadow-inner"
+      style={{ transform: shakeX ? `translateX(${shakeX}px)` : undefined }}
+      aria-label="하이라이트 피치"
+    >
+      <svg viewBox="0 0 150 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
+        {/* 잔디 무늬 */}
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+          <rect key={i} x={i * 15} y={0} width={15} height={100} fill={i % 2 ? '#047857' : '#05805c'} />
+        ))}
+        {/* 라인 */}
+        <g stroke="#ffffff" strokeOpacity={0.45} strokeWidth={0.5} fill="none">
+          <rect x={GOAL_LINE_OURS} y={2} width={GOAL_LINE_THEIRS - GOAL_LINE_OURS} height={96} />
+          <line x1={75} y1={2} x2={75} y2={98} />
+          <ellipse cx={75} cy={50} rx={11} ry={14} />
+          <circle cx={75} cy={50} r={0.6} fill="#ffffff" />
+          <rect x={GOAL_LINE_OURS} y={27} width={20} height={46} />
+          <rect x={GOAL_LINE_THEIRS - 20} y={27} width={20} height={46} />
+          <rect x={GOAL_LINE_OURS} y={40} width={7} height={20} />
+          <rect x={GOAL_LINE_THEIRS - 7} y={40} width={7} height={20} />
+        </g>
+        <Net side="THEIRS" bulge={netBulge('THEIRS')} />
+        <Net side="OURS" bulge={netBulge('OURS')} />
+
+        {/* 궤적 */}
+        {active
+          .filter((a) => a.effect.kind === 'TRAIL' && a.effect.segment)
+          .map((a, i) => {
+            const points = trailPoints(a.effect.segment!, t);
+            const fade = a.p > 0.7 ? (1 - a.p) / 0.3 : 1;
+            return (
+              <polyline
+                key={`trail-${i}`}
+                points={points.map((p) => `${X(p.x)},${p.y}`).join(' ')}
+                fill="none"
+                stroke="#fef9c3"
+                strokeOpacity={0.85 * fade}
+                strokeWidth={0.7}
+                strokeDasharray="2 1.4"
+                strokeLinecap="round"
+              />
+            );
+          })}
+
+        {/* 태클 · 다이빙 · 골망 충격 */}
+        {active.map(({ effect, p }, i) => {
+          if (!effect.point) return null;
+          const cx = X(effect.point.x);
+          const cy = effect.point.y;
+          const color = effect.tone === 'bad' ? '#fb7185' : '#fde047';
+          if (effect.kind === 'TACKLE') {
+            const r = 2 + p * 5;
+            return (
+              <g key={`fx-${i}`} opacity={1 - p} stroke={color} strokeWidth={0.8} strokeLinecap="round">
+                {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+                  const a = (deg * Math.PI) / 180;
+                  return <line key={deg} x1={cx + Math.cos(a) * r * 0.45} y1={cy + Math.sin(a) * r * 0.45} x2={cx + Math.cos(a) * r} y2={cy + Math.sin(a) * r} />;
+                })}
+              </g>
+            );
+          }
+          if (effect.kind === 'DIVE') {
+            return (
+              <g key={`fx-${i}`} opacity={1 - p} stroke="#ffffff" strokeWidth={0.6} fill="none" strokeLinecap="round">
+                {[0, 1, 2].map((k) => (
+                  <path key={k} d={`M${cx - 4 - k * 2} ${cy - 3 + k * 3} q -3 1.5 -5 0`} />
+                ))}
+              </g>
+            );
+          }
+          if (effect.kind === 'NET') {
+            return <circle key={`fx-${i}`} cx={cx} cy={cy} r={1 + p * 9} fill="none" stroke="#ffffff" strokeOpacity={1 - p} strokeWidth={0.8} />;
+          }
+          return null;
+        })}
+      </svg>
+
+      {situation.tokens.map((token) => {
+        const at = (choreo && positionAt(choreo, token.id, t)) ?? token;
+        return (
+          <TokenDot key={token.id} token={token} kit={token.side === me.side ? myKit : theirKit} at={at} />
+        );
+      })}
+      <div
+        className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow ring-2 ring-zinc-900"
+        style={{ left: `${ball.x}%`, top: `${ball.y}%`, zIndex: 4 }}
+        aria-hidden="true"
+      />
+
+      {/* 짧은 판정 글씨 · 큰 플래시 */}
+      {active
+        .filter((a) => a.effect.kind === 'BLOCK' && a.effect.text && a.effect.point)
+        .map(({ effect, p }, i) => (
+          <span
+            key={`label-${i}`}
+            className={cx(
+              'pointer-events-none absolute -translate-x-1/2 rounded px-1 text-[10px] font-bold text-white',
+              effect.tone === 'bad' ? 'bg-rose-600/90' : 'bg-zinc-900/70',
+            )}
+            style={{ left: `${effect.point!.x}%`, top: `${effect.point!.y - 9 - p * 4}%`, opacity: 1 - p * p, zIndex: 5 }}
+          >
+            {effect.text}
+          </span>
+        ))}
+      {active
+        .filter((a) => a.effect.kind === 'FLASH')
+        .map(({ effect, p }, i) => {
+          const scale = 0.6 + 0.6 * Math.min(1, p / 0.15) - 0.15 * Math.min(1, Math.max(0, (p - 0.15) / 0.35));
+          const opacity = p < 0.08 ? p / 0.08 : p > 0.75 ? (1 - p) / 0.25 : 1;
+          return (
+            <div key={`flash-${i}`} className="pointer-events-none absolute inset-0 flex items-center justify-center" style={{ zIndex: 6 }}>
+              <span
+                className={cx(
+                  'text-4xl font-black tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] sm:text-6xl',
+                  effect.tone === 'bad' ? 'text-rose-200' : 'text-yellow-200',
+                )}
+                style={{ transform: `scale(${scale})`, opacity }}
+              >
+                {effect.text}
+              </span>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// 화면
+// ----------------------------------------------------------------------------
+
+/** 한 상황: 선택 → 연출 재생 → 결과 */
+function SituationView({
   situation,
   resolved,
   myKit,
   theirKit,
+  children,
 }: {
   situation: MatchSituation;
   resolved: ResolvedSituation | undefined;
   myKit: KitColors | null;
   theirKit: KitColors | null;
+  children: (state: { done: boolean; skip: () => void }) => ReactNode;
 }) {
-  const ball = ballTarget(situation, resolved);
-  const me = situation.tokens.find((t) => t.tag === 'PROTAGONIST')!;
-  const myMove = resolved ? { x: (me.x * 2 + ball.x) / 3, y: (me.y * 2 + ball.y) / 3 } : null;
+  const choreo = useMemo(() => (resolved ? buildChoreography(situation, resolved) : null), [situation, resolved]);
+  const [done, setDone] = useState(false);
+  const [skipped, setSkipped] = useState(false);
+  const t = usePlayback(choreo, skipped, () => setDone(true));
   return (
-    <div className="relative aspect-[3/2] w-full overflow-hidden rounded-xl bg-emerald-700 shadow-inner" aria-label="하이라이트 피치">
-      {/* 피치 라인 */}
-      <div className="absolute inset-2 rounded border-2 border-white/40" />
-      <div className="absolute inset-y-2 left-1/2 w-0.5 -translate-x-1/2 bg-white/40" />
-      <div className="absolute left-1/2 top-1/2 h-[28%] w-[18%] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/40" />
-      <div className="absolute left-2 top-1/2 h-[46%] w-[14%] -translate-y-1/2 border-2 border-l-0 border-white/40" />
-      <div className="absolute right-2 top-1/2 h-[46%] w-[14%] -translate-y-1/2 border-2 border-r-0 border-white/40" />
-      <div className="absolute left-0 top-1/2 h-[16%] w-2 -translate-y-1/2 bg-white/70" />
-      <div className="absolute right-0 top-1/2 h-[16%] w-2 -translate-y-1/2 bg-white/70" />
-
-      {situation.tokens.map((token) => (
-        <TokenDot
-          key={token.id}
-          token={token}
-          kit={token.side === me.side ? myKit : theirKit}
-          moved={token.tag === 'PROTAGONIST' ? myMove : null}
-        />
-      ))}
-      <div
-        className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow ring-2 ring-zinc-900 transition-all duration-700 ease-out"
-        style={{ left: `${ball.x}%`, top: `${ball.y}%` }}
-        aria-hidden="true"
-      />
-    </div>
+    <>
+      <div className="mx-auto w-full max-w-3xl">
+        <Pitch situation={situation} choreo={choreo} t={t} myKit={myKit} theirKit={theirKit} />
+      </div>
+      {children({ done: !resolved || done, skip: () => setSkipped(true) })}
+    </>
   );
 }
 
 export function HighlightScreen() {
   const session = useGameStore((s) => s.session);
   const picks = useGameStore((s) => s.highlightPicks);
+  const appearance = useGameStore((s) => s.game?.player.profile.appearance);
   const chooseOption = useGameStore((s) => s.chooseOption);
   const finishHighlight = useGameStore((s) => s.finishHighlight);
   const autoHighlight = useGameStore((s) => s.autoHighlight);
@@ -136,8 +353,10 @@ export function HighlightScreen() {
   const successes = picks.filter((p) => p.success).length;
   const competition =
     BASE_WORLD.competitions[briefing.fixture.competitionId]?.nameKo ?? BASE_WORLD.leagues[briefing.fixture.competitionId]?.nameKo ?? '';
+  // 국가대표 경기면 국가대표 유니폼, 아니면 소속팀 유니폼
   const myKit = kitColorsFor(BASE_WORLD, briefing.playerTeam.id);
   const theirKit = kitColorsFor(BASE_WORLD, briefing.opponent.id);
+  const isNational = briefing.playerTeam.id.startsWith('nation:');
   const opponentsTagged = briefing.taggedPlayers.filter((t) => t.side !== briefing.playerTeamSide);
 
   return (
@@ -145,18 +364,19 @@ export function HighlightScreen() {
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Tag tone="emerald">하이라이트 · {HIGHLIGHT_KIND_LABELS[briefing.kind]}</Tag>
+          {isNational ? <Tag tone="sky">국가대표</Tag> : null}
           <span className="text-xs text-zinc-500">
             {competition} {briefing.fixture.stage}
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <PlayerToken kit={myKit} size={22} />
-            <span className="font-bold text-zinc-900 dark:text-zinc-50">{briefing.playerTeam.name}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            {appearance ? <Avatar appearance={appearance} kit={myKit} size={44} label={`${briefing.protagonist.name} (경기 유니폼)`} /> : <PlayerToken kit={myKit} size={22} />}
+            <span className="truncate font-bold text-zinc-900 dark:text-zinc-50">{briefing.playerTeam.name}</span>
           </div>
           <span className="text-sm text-zinc-500">vs</span>
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-zinc-900 dark:text-zinc-50">{briefing.opponent.name}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-bold text-zinc-900 dark:text-zinc-50">{briefing.opponent.name}</span>
             <PlayerToken kit={theirKit} size={22} />
           </div>
         </div>
@@ -167,52 +387,59 @@ export function HighlightScreen() {
         ) : null}
       </header>
 
-      <div className="mx-auto w-full max-w-3xl">
-        <Pitch situation={situation} resolved={resolved} myKit={myKit} theirKit={theirKit} />
-      </div>
-
-      <Card
-        title={`상황 ${viewIndex + 1} / ${situations.length} · ${situation.minute}분`}
-        actions={<span className="text-xs text-zinc-500">선택 성공 {successes} / {picks.length}</span>}
-      >
-        <p className="mb-3 text-sm text-zinc-700 dark:text-zinc-300">{situation.description}</p>
-        {resolved ? (
-          <div className="flex flex-col gap-3">
-            <p className={cx('text-lg font-bold', resolved.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
-              {RESULT_TEXT[resolved.kind][resolved.success ? 0 : 1]}
-            </p>
-            <p className="text-xs text-zinc-500">성공 확률 {Math.round(resolved.chance * 100)}%</p>
-            {isLast ? (
-              <Button variant="primary" onClick={finishHighlight}>
-                경기 결과 보기
-              </Button>
+      <SituationView key={situation.id} situation={situation} resolved={resolved} myKit={myKit} theirKit={theirKit}>
+        {({ done, skip }) => (
+          <Card
+            title={`상황 ${viewIndex + 1} / ${situations.length} · ${situation.minute}분`}
+            actions={<span className="text-xs text-zinc-500">선택 성공 {successes} / {picks.length}</span>}
+          >
+            <p className="mb-3 text-sm text-zinc-700 dark:text-zinc-300">{situation.description}</p>
+            {resolved && !done ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-zinc-500">플레이가 이어지는 중…</p>
+                <Button variant="ghost" className="text-xs" onClick={skip}>
+                  연출 건너뛰기
+                </Button>
+              </div>
+            ) : resolved ? (
+              <div className="flex flex-col gap-3">
+                <p className={cx('text-lg font-bold', resolved.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                  {RESULT_TEXT[resolved.kind][resolved.success ? 0 : 1]}
+                </p>
+                <p className="text-xs text-zinc-500">성공 확률 {Math.round(resolved.chance * 100)}%</p>
+                {isLast ? (
+                  <Button variant="primary" onClick={finishHighlight}>
+                    경기 결과 보기
+                  </Button>
+                ) : (
+                  <Button variant="primary" onClick={() => setViewIndex((i) => i + 1)}>
+                    다음 상황
+                  </Button>
+                )}
+              </div>
             ) : (
-              <Button variant="primary" onClick={() => setViewIndex((i) => i + 1)}>
-                다음 상황
-              </Button>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {situation.options.map((option) => {
+                  const chance = Math.round(optionSuccessChance(session, option) * 100);
+                  const tone = chance >= 65 ? 'text-emerald-600 dark:text-emerald-400' : chance >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400';
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => chooseOption(situation.id, option.id)}
+                      className="flex flex-col items-start gap-1 rounded-lg border border-zinc-200 p-3 text-left transition-colors hover:border-emerald-500 hover:bg-emerald-50 dark:border-zinc-700 dark:hover:bg-emerald-900/20"
+                    >
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">{option.label}</span>
+                      <span className="text-[11px] text-zinc-500">{option.keyAttributes.map((k) => ATTRIBUTE_META[k].label).join(' · ')}</span>
+                      <span className={cx('text-sm font-bold tabular-nums', tone)}>성공 {chance}%</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
-          </div>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-3">
-            {situation.options.map((option) => {
-              const chance = Math.round(optionSuccessChance(session, option) * 100);
-              const tone = chance >= 65 ? 'text-emerald-600 dark:text-emerald-400' : chance >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400';
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => chooseOption(situation.id, option.id)}
-                  className="flex flex-col items-start gap-1 rounded-lg border border-zinc-200 p-3 text-left transition-colors hover:border-emerald-500 hover:bg-emerald-50 dark:border-zinc-700 dark:hover:bg-emerald-900/20"
-                >
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">{option.label}</span>
-                  <span className="text-[11px] text-zinc-500">{option.keyAttributes.map((k) => ATTRIBUTE_META[k].label).join(' · ')}</span>
-                  <span className={cx('text-sm font-bold tabular-nums', tone)}>성공 {chance}%</span>
-                </button>
-              );
-            })}
-          </div>
+          </Card>
         )}
-      </Card>
+      </SituationView>
 
       <div className="flex justify-end">
         <Button variant="ghost" onClick={autoHighlight}>
