@@ -1,6 +1,8 @@
 'use client';
 
 import { Avatar, type AvatarTrophy } from '@/components/Avatar';
+import { PixelTrophy } from '@/components/pixel/PixelIcons';
+import { PlayerStage } from '@/components/pixel/PlayerStage';
 import { BASE_WORLD } from '@/engine/career';
 import { kitColorsFor } from '@/engine/world';
 import { useGameStore } from '@/store/gameStore';
@@ -28,21 +30,19 @@ function CeremonyStage({ ceremony }: { ceremony: Ceremony }) {
           ? `턱시도를 차려입고 레드카펫에 섰다. 발롱도르 ${rank}위.`
           : '턱시도를 차려입고 시상식을 지켜봤다.';
   return (
-    <div
-      className={cx(
-        'mb-4 flex items-center gap-4 rounded-xl p-3',
-        isWorld ? 'bg-gradient-to-r from-zinc-900 via-zinc-800 to-amber-900 text-amber-50' : 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100',
-      )}
-    >
-      <Avatar
-        appearance={player.profile.appearance}
-        kit={kit}
-        outfit={isWorld ? 'TUXEDO' : 'KIT'}
-        trophy={trophy}
-        size={isWorld ? 104 : 72}
-        label={isWorld ? `${player.profile.name} (턱시도)` : player.profile.name}
-      />
-      <p className={cx('text-sm font-medium', trophy && 'text-base font-bold text-amber-200')}>{caption}</p>
+    <div className="mb-4 flex items-center gap-4">
+      <PlayerStage variant={isWorld ? 'stage' : 'pitch'}>
+        <Avatar
+          appearance={player.profile.appearance}
+          kit={kit}
+          outfit={isWorld ? 'TUXEDO' : 'KIT'}
+          trophy={trophy}
+          size={isWorld ? 125 : 100}
+          idle={Boolean(trophy)}
+          label={isWorld ? `${player.profile.name} (턱시도)` : player.profile.name}
+        />
+      </PlayerStage>
+      <p className={cx('text-sm text-zinc-200', trophy && 'font-pixel text-base font-bold text-amber-300 drop-shadow-[2px_2px_0_#05080f]')}>{caption}</p>
     </div>
   );
 }
@@ -50,7 +50,14 @@ function CeremonyStage({ ceremony }: { ceremony: Ceremony }) {
 export function CeremonyModal({ ceremony }: { ceremony: Ceremony }) {
   const dismiss = useGameStore((s) => s.dismissCeremony);
   return (
-    <Modal title={`🏆 ${ceremony.title}`}>
+    <Modal
+      title={
+        <span className="flex items-center gap-2">
+          <PixelTrophy size={20} />
+          {ceremony.title}
+        </span>
+      }
+    >
       <CeremonyStage ceremony={ceremony} />
       <ul className="flex flex-col gap-3">
         {ceremony.entries.map((entry) => {
@@ -58,10 +65,10 @@ export function CeremonyModal({ ceremony }: { ceremony: Ceremony }) {
           return (
             <li
               key={entry.award + entry.label}
-              className={cx('rounded-lg border p-3', won ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20' : 'border-zinc-200 dark:border-zinc-700')}
+              className={cx('m-[2px] p-3', won ? 'bg-amber-950/60 shadow-[0_0_0_2px_#f5b82e]' : 'px-inset')}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100">{entry.label}</span>
+                <span className="font-pixel text-xs font-bold text-zinc-50">{entry.label}</span>
                 {won ? <Tag tone="amber">수상!</Tag> : entry.playerRank && entry.ranking ? <Tag>내 순위 {entry.playerRank}위</Tag> : null}
               </div>
               <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">

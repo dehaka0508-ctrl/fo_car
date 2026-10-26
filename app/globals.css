@@ -1,25 +1,309 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f4f4f5;
-  --foreground: #18181b;
-}
+/* 항상 '나이트 스타디움' 어두운 테마: dark: 변형은 <html class="dark"> 기준 */
+@custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
-}
+@theme {
+  /* zinc → 밤 경기장 남색 (50 가장 밝음 · 950 가장 어두움) */
+  --color-zinc-50: #f4f7fb;
+  --color-zinc-100: #e5eaf2;
+  --color-zinc-200: #cfd8e4;
+  --color-zinc-300: #b4c0d0;
+  --color-zinc-400: #97a6ba;
+  --color-zinc-500: #7d8ea6;
+  --color-zinc-600: #55657c;
+  --color-zinc-700: #34435a;
+  --color-zinc-800: #223047;
+  --color-zinc-900: #151f30;
+  --color-zinc-950: #0b1220;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #09090b;
-    --foreground: #fafafa;
+  /* emerald → 잔디 녹색 */
+  --color-emerald-50: #ecfdf1;
+  --color-emerald-100: #d1fadf;
+  --color-emerald-200: #a6f0c0;
+  --color-emerald-300: #6fe39b;
+  --color-emerald-400: #44d17a;
+  --color-emerald-500: #2bb862;
+  --color-emerald-600: #20984f;
+  --color-emerald-700: #1b7a41;
+  --color-emerald-800: #186136;
+  --color-emerald-900: #134d2c;
+  --color-emerald-950: #0a2b18;
+
+  /* 도트 느낌: 모서리를 둥글리지 않는다 (rounded-full은 그대로) */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+
+  --animate-pixel-idle: pixel-idle 1.2s steps(1) infinite;
+  @keyframes pixel-idle {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
   }
 }
 
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-pixel: var(--font-galmuri), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+  /* 패널 */
+  --panel: #131d2e;
+  --panel-top: #18253a;
+  --panel-line: #33445f;
+  --panel-ink: #05080f;
+  --led: #ffd23f;
+}
+
+html {
+  background: #070c17;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  color: var(--color-zinc-100);
   font-family: var(--font-sans);
+}
+
+/* 제목 · 버튼 · 숫자는 픽셀 폰트 (갈무리11은 12px · 24px에서 가장 선명) */
+h1,
+h2,
+h3,
+button,
+.font-pixel {
+  font-family: var(--font-pixel);
+  letter-spacing: 0;
+}
+
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-emerald-400);
+}
+
+::selection {
+  background: #2bb86266;
+}
+
+@layer components {
+  /* 도트 패널: 박스 그림자로 3px 테두리를 그려 모서리가 계단처럼 깎인다 */
+  .px-panel {
+    background: linear-gradient(180deg, var(--panel-top), var(--panel) 48px);
+    box-shadow:
+      0 -3px 0 0 var(--panel-line),
+      0 3px 0 0 var(--panel-line),
+      -3px 0 0 0 var(--panel-line),
+      3px 0 0 0 var(--panel-line),
+      0 9px 0 0 rgb(0 0 0 / 0.45);
+  }
+
+  .px-inset {
+    background: #0c1424;
+    box-shadow:
+      inset 0 2px 0 0 #070b14,
+      0 -2px 0 0 #26354d,
+      0 2px 0 0 #26354d,
+      -2px 0 0 0 #26354d,
+      2px 0 0 0 #26354d;
+  }
+
+  /* 도트 버튼: 바깥 2px 검은 테두리 + 아래쪽 3px 그늘, 누르면 2px 내려간다 */
+  .px-btn {
+    position: relative;
+    box-shadow:
+      0 -2px 0 0 var(--panel-ink),
+      0 2px 0 0 var(--panel-ink),
+      -2px 0 0 0 var(--panel-ink),
+      2px 0 0 0 var(--panel-ink),
+      inset 0 -3px 0 0 rgb(0 0 0 / 0.32),
+      inset 0 2px 0 0 rgb(255 255 255 / 0.18);
+    transition: transform 60ms steps(1);
+  }
+  .px-btn:not(:disabled):active {
+    transform: translateY(2px);
+    box-shadow:
+      0 -2px 0 0 var(--panel-ink),
+      0 2px 0 0 var(--panel-ink),
+      -2px 0 0 0 var(--panel-ink),
+      2px 0 0 0 var(--panel-ink),
+      inset 0 2px 0 0 rgb(0 0 0 / 0.32);
+  }
+  .px-btn:focus-visible,
+  .px-focus:focus-visible {
+    outline: 2px solid var(--led);
+    outline-offset: 4px;
+  }
+
+  /* 칸이 나뉜 게이지 (HP 바) */
+  .px-meter {
+    height: 10px;
+    background: #0a101c;
+    box-shadow:
+      0 -2px 0 0 #26354d,
+      0 2px 0 0 #26354d,
+      -2px 0 0 0 #26354d,
+      2px 0 0 0 #26354d;
+  }
+  .px-meter > span {
+    display: block;
+    height: 100%;
+    background-image: linear-gradient(90deg, transparent 0 6px, rgb(0 0 0 / 0.55) 6px 8px), linear-gradient(180deg, rgb(255 255 255 / 0.25) 0 3px, transparent 3px);
+    background-size:
+      8px 100%,
+      100% 100%;
+  }
+
+  .pixel-idle {
+    animation: var(--animate-pixel-idle);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 배경: 밤 경기장 (components/StadiumBackdrop.tsx)
+ * ------------------------------------------------------------------------- */
+.stadium {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+  background: #0a2a17;
+}
+.stadium-sky {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 130px;
+  /* 계단식 그라데이션 (8비트 하늘) */
+  background: linear-gradient(
+    180deg,
+    #04070f 0 26px,
+    #060b17 26px 52px,
+    #08101f 52px 78px,
+    #0b1528 78px 104px,
+    #0e1a31 104px 130px
+  );
+}
+.stadium-stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.stadium-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 340px 300px at 27% 30px, rgb(255 246 205 / 0.22), transparent 70%),
+    radial-gradient(ellipse 340px 300px at 73% 30px, rgb(255 246 205 / 0.22), transparent 70%),
+    radial-gradient(ellipse 60% 420px at 50% 330px, rgb(160 255 180 / 0.08), transparent 70%);
+  z-index: 3;
+}
+.stadium-tower {
+  position: absolute;
+  top: 6px;
+  z-index: 2;
+}
+.stadium-tower-left {
+  left: 26%;
+}
+.stadium-tower-right {
+  right: 26%;
+}
+@media (max-width: 639px) {
+  .stadium-tower {
+    display: none;
+  }
+}
+.stadium-stands {
+  position: absolute;
+  top: 104px;
+  left: 0;
+}
+.stadium-boards {
+  position: absolute;
+  top: 280px;
+  left: 0;
+  right: 0;
+  height: 26px;
+  overflow: hidden;
+  background: #04060b;
+  border-top: 2px solid #2a3650;
+  border-bottom: 2px solid #0b0f18;
+  z-index: 2;
+}
+/* LED 도트 격자 */
+.stadium-boards::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 2px, rgb(0 0 0 / 0.55) 2px 3px),
+    repeating-linear-gradient(180deg, transparent 0 2px, rgb(0 0 0 / 0.55) 2px 3px);
+}
+.stadium-marquee {
+  display: flex;
+  width: max-content;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  line-height: 22px;
+  color: var(--led);
+  text-shadow: 0 0 6px rgb(255 210 63 / 0.7);
+  white-space: nowrap;
+  animation: stadium-marquee 60s linear infinite;
+}
+.stadium-marquee span:nth-child(2) {
+  color: #6fe39b;
+  text-shadow: 0 0 6px rgb(111 227 155 / 0.6);
+}
+@keyframes stadium-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.stadium-pitch {
+  position: absolute;
+  top: 306px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 잔디 깎은 줄무늬 + 도트 잔디결 */
+  background:
+    repeating-linear-gradient(90deg, rgb(0 0 0 / 0.06) 0 4px, transparent 4px 12px),
+    repeating-linear-gradient(180deg, #1f7a3c 0 64px, #1b6c35 64px 128px);
+}
+.stadium-pitch-lines {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(#e8f2e4, #e8f2e4) 0 18px / 100% 4px no-repeat,
+    radial-gradient(circle 120px at 50% 360px, transparent 114px, #e8f2e4 115px 119px, transparent 120px),
+    linear-gradient(#e8f2e4, #e8f2e4) 50% 18px / 4px 100% no-repeat;
+  opacity: 0.55;
+}
+/* 아래로 갈수록 어둡게 (글자 대비) */
+.stadium-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(4 8 16 / 0) 0, rgb(4 8 16 / 0) 300px, rgb(4 8 16 / 0.5) 520px, rgb(4 8 16 / 0.72) 100%);
+  z-index: 4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stadium-marquee,
+  .pixel-idle {
+    animation: none;
+  }
 }

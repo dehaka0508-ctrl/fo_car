@@ -14,6 +14,7 @@ import { RecordsTab } from './tabs/RecordsTab';
 import { ShopTab } from './tabs/ShopTab';
 import { TrainingTab } from './tabs/TrainingTab';
 import { TransferTab } from './tabs/TransferTab';
+import { GameTopBar } from './GameTopBar';
 import { Button, cx } from './ui';
 
 type TabId = 'overview' | 'player' | 'training' | 'shop' | 'events' | 'transfer' | 'records';
@@ -42,7 +43,7 @@ export function CareerGame() {
   const [tab, setTab] = useState<TabId>('overview');
 
   if (!hydrated) {
-    return <p className="p-8 text-center text-sm text-zinc-500">세이브를 불러오는 중…</p>;
+    return <p className="font-pixel p-8 text-center text-xs text-zinc-300">LOADING…</p>;
   }
   if (!game) return <CreationScreen />;
 
@@ -77,33 +78,36 @@ export function CareerGame() {
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-6">
+      <GameTopBar game={game} />
       <PlayerHeader game={game} />
 
       {message ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-200">
+        <div className="px-inset m-[2px] flex items-center justify-between gap-2 px-3 py-2 text-sm text-sky-200">
           <span>{message}</span>
-          <button type="button" className="text-xs" onClick={clearMessage}>
+          <button type="button" className="px-focus text-xs text-zinc-400 hover:text-zinc-50" onClick={clearMessage}>
             닫기
           </button>
         </div>
       ) : null}
 
-      <nav className="-mx-4 overflow-x-auto px-4" aria-label="메뉴">
-        <div className="flex min-w-max gap-1 border-b border-zinc-200 dark:border-zinc-800">
+      <nav className="px-panel m-[3px] overflow-x-auto" aria-label="메뉴">
+        <div className="flex min-w-max">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
+              aria-current={tab === t.id ? 'page' : undefined}
               className={cx(
-                'relative px-3 py-2 text-sm font-medium',
-                tab === t.id ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200',
+                'px-focus relative flex items-center gap-1.5 px-4 py-3 text-xs font-bold',
+                tab === t.id ? 'bg-zinc-950/70 text-amber-300' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-50',
               )}
             >
+              {tab === t.id ? <span aria-hidden="true" className="text-emerald-400">▶</span> : null}
               {t.label}
-              {t.badge ? <span className="ml-1 rounded-full bg-rose-500 px-1.5 text-[10px] text-white">{t.badge}</span> : null}
-              {tab === t.id ? <span className="absolute inset-x-2 -bottom-px h-0.5 bg-emerald-600" /> : null}
+              {t.badge ? <span className="bg-rose-500 px-1 text-[11px] leading-4 text-white shadow-[2px_2px_0_0_#05080f]">{t.badge}</span> : null}
+              {tab === t.id ? <span className="absolute inset-x-0 bottom-0 h-[3px] bg-emerald-400" /> : null}
             </button>
           ))}
         </div>

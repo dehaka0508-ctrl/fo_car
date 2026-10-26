@@ -315,6 +315,9 @@ export type Confederation = 'UEFA' | 'AFC' | 'CONMEBOL' | 'CONCACAF' | 'CAF' | '
 export interface KitColors {
   primary: string;
   secondary: string | null;
+  /** 반바지 · 양말 색 (선택). 없으면 상의 색으로 만든다 (components/pixel/sprite.ts) */
+  shorts?: string | null;
+  socks?: string | null;
 }
 
 export interface NationDefinition {

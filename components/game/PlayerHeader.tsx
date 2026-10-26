@@ -1,6 +1,7 @@
 'use client';
 
 import { Avatar } from '@/components/Avatar';
+import { PlayerStage } from '@/components/pixel/PlayerStage';
 import { SQUAD_LEVEL_LABELS } from '@/data/labels';
 import { PLAYSTYLE_DEFINITIONS } from '@/data/playstyles';
 import { BASE_WORLD } from '@/engine/career';
@@ -18,17 +19,19 @@ export function PlayerHeader({ game }: { game: GameState }) {
   return (
     <Card className="flex flex-col gap-4 sm:flex-row sm:items-center">
       <div className="flex items-center gap-4">
-        <Avatar appearance={player.profile.appearance} kit={club?.kitColors} size={84} />
+        <PlayerStage>
+          <Avatar appearance={player.profile.appearance} kit={club?.kitColors} size={100} idle />
+        </PlayerStage>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-xl font-bold text-zinc-900 dark:text-zinc-50">{player.profile.name}</h1>
+            <h1 className="truncate text-2xl font-bold text-zinc-50 drop-shadow-[2px_2px_0_#05080f]">{player.profile.name}</h1>
             <Tag tone="emerald">OVR {player.ovr}</Tag>
           </div>
           <p className="text-xs text-zinc-500">
             {BASE_WORLD.nations[player.profile.nationality]?.nameKo} · {player.age}세 · {player.profile.heightCm}cm / {player.weightKg}kg ·{' '}
             {player.profile.role.position} {PLAYSTYLE_DEFINITIONS[player.profile.role.playStyle].label}
           </p>
-          <p className="mt-1 text-sm text-zinc-800 dark:text-zinc-200">
+          <p className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-1 text-sm text-zinc-100">
             {club ? club.nameKo : 'FA (무소속)'}
             {league ? <span className="text-zinc-500"> · {league.nameKo}</span> : null}
             {contract?.type === 'LOAN' ? <Tag tone="sky">임대 · 원소속 {clubLabel(contract.parentClubId)}</Tag> : null}

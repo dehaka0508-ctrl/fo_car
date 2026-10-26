@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Avatar, PlayerToken } from '@/components/Avatar';
+import { PlayerStage } from '@/components/pixel/PlayerStage';
 import { ATTRIBUTE_META } from '@/data/attributes';
 import { HAIR_COLORS, SKIN_TONES } from '@/data/appearance';
 import { HIGHLIGHT_KIND_LABELS } from '@/data/labels';
@@ -101,7 +102,7 @@ function TokenDot({ token, kit, at }: { token: MatchToken; kit: KitColors | null
       style={{ left: `${at.x}%`, top: `${at.y}%`, zIndex: isMe ? 3 : 2 }}
     >
       {token.label ? (
-        <span className={cx('mb-0.5 max-w-24 truncate rounded px-1 text-[10px] font-semibold text-white', isMe ? 'bg-emerald-700' : badge)}>
+        <span className={cx('font-pixel mb-0.5 max-w-24 truncate px-1 text-[11px] leading-4 text-white shadow-[1px_1px_0_0_#05080f]', isMe ? 'bg-emerald-600' : badge)}>
           {token.tag === 'RIVAL' ? '라이벌 ' : token.tag === 'FORMER_PARTNER' ? '옛 파트너 ' : ''}
           {token.label}
         </span>
@@ -167,17 +168,17 @@ function Pitch({
 
   return (
     <div
-      className="relative aspect-[3/2] w-full overflow-hidden rounded-xl bg-emerald-700 shadow-inner"
+      className="px-inset relative m-[2px] aspect-[3/2] overflow-hidden bg-[#1b6c35]"
       style={{ transform: shakeX ? `translateX(${shakeX}px)` : undefined }}
       aria-label="하이라이트 피치"
     >
       <svg viewBox="0 0 150 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
         {/* 잔디 무늬 */}
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-          <rect key={i} x={i * 15} y={0} width={15} height={100} fill={i % 2 ? '#047857' : '#05805c'} />
+          <rect key={i} x={i * 15} y={0} width={15} height={100} fill={i % 2 ? '#1b6c35' : '#1f7a3c'} />
         ))}
         {/* 라인 */}
-        <g stroke="#ffffff" strokeOpacity={0.45} strokeWidth={0.5} fill="none">
+        <g stroke="#e8f2e4" strokeOpacity={0.7} strokeWidth={0.6} fill="none">
           <rect x={GOAL_LINE_OURS} y={2} width={GOAL_LINE_THEIRS - GOAL_LINE_OURS} height={96} />
           <line x1={75} y1={2} x2={75} y2={98} />
           <ellipse cx={75} cy={50} rx={11} ry={14} />
@@ -262,8 +263,8 @@ function Pitch({
           <span
             key={`label-${i}`}
             className={cx(
-              'pointer-events-none absolute -translate-x-1/2 rounded px-1 text-[10px] font-bold text-white',
-              effect.tone === 'bad' ? 'bg-rose-600/90' : 'bg-zinc-900/70',
+              'font-pixel pointer-events-none absolute -translate-x-1/2 px-1 text-[11px] font-bold text-white shadow-[2px_2px_0_0_#05080f]',
+              effect.tone === 'bad' ? 'bg-rose-600' : 'bg-zinc-900',
             )}
             style={{ left: `${effect.point!.x}%`, top: `${effect.point!.y - 9 - p * 4}%`, opacity: 1 - p * p, zIndex: 5 }}
           >
@@ -279,8 +280,8 @@ function Pitch({
             <div key={`flash-${i}`} className="pointer-events-none absolute inset-0 flex items-center justify-center" style={{ zIndex: 6 }}>
               <span
                 className={cx(
-                  'text-4xl font-black tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] sm:text-6xl',
-                  effect.tone === 'bad' ? 'text-rose-200' : 'text-yellow-200',
+                  'font-pixel text-5xl font-bold drop-shadow-[4px_4px_0_#05080f] sm:text-7xl',
+                  effect.tone === 'bad' ? 'text-rose-300' : 'text-amber-300',
                 )}
                 style={{ transform: `scale(${scale})`, opacity }}
               >
@@ -361,27 +362,32 @@ export function HighlightScreen() {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-6">
-      <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <header className="px-panel m-[3px] flex flex-col gap-3 p-4">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <Tag tone="emerald">하이라이트 · {HIGHLIGHT_KIND_LABELS[briefing.kind]}</Tag>
           {isNational ? <Tag tone="sky">국가대표</Tag> : null}
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-zinc-400">
             {competition} {briefing.fixture.stage}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            {appearance ? <Avatar appearance={appearance} kit={myKit} size={44} label={`${briefing.protagonist.name} (경기 유니폼)`} /> : <PlayerToken kit={myKit} size={22} />}
-            <span className="truncate font-bold text-zinc-900 dark:text-zinc-50">{briefing.playerTeam.name}</span>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            {appearance ? (
+              <PlayerStage className="hidden sm:flex">
+                <Avatar appearance={appearance} kit={myKit} size={75} idle label={`${briefing.protagonist.name} (경기 유니폼)`} />
+              </PlayerStage>
+            ) : null}
+            <PlayerToken kit={myKit} size={22} />
+            <span className="truncate text-sm font-bold text-zinc-50">{briefing.playerTeam.name}</span>
           </div>
-          <span className="text-sm text-zinc-500">vs</span>
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-bold text-zinc-900 dark:text-zinc-50">{briefing.opponent.name}</span>
+          <span className="px-inset font-pixel m-[2px] px-3 py-1.5 text-xs text-amber-300 [text-shadow:0_0_6px_rgb(255_210_63/0.6)]">VS</span>
+          <div className="flex min-w-0 items-center justify-end gap-3">
+            <span className="truncate text-right text-sm font-bold text-zinc-50">{briefing.opponent.name}</span>
             <PlayerToken kit={theirKit} size={22} />
           </div>
         </div>
         {opponentsTagged.length ? (
-          <p className="text-xs text-rose-600 dark:text-rose-400">
+          <p className="text-center text-xs text-rose-300">
             상대 팀에 {opponentsTagged.map((t) => `${t.tag === 'RIVAL' ? '숙명의 라이벌' : '옛 파트너'} ${t.name}`).join(', ')}이(가) 있다!
           </p>
         ) : null}
@@ -427,11 +433,11 @@ export function HighlightScreen() {
                       key={option.id}
                       type="button"
                       onClick={() => chooseOption(situation.id, option.id)}
-                      className="flex flex-col items-start gap-1 rounded-lg border border-zinc-200 p-3 text-left transition-colors hover:border-emerald-500 hover:bg-emerald-50 dark:border-zinc-700 dark:hover:bg-emerald-900/20"
+                      className="px-btn m-[2px] flex flex-col items-start gap-1.5 bg-zinc-800 p-3 text-left hover:bg-zinc-700"
                     >
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">{option.label}</span>
-                      <span className="text-[11px] text-zinc-500">{option.keyAttributes.map((k) => ATTRIBUTE_META[k].label).join(' · ')}</span>
-                      <span className={cx('text-sm font-bold tabular-nums', tone)}>성공 {chance}%</span>
+                      <span className="text-xs font-bold text-zinc-50">{option.label}</span>
+                      <span className="font-sans text-[11px] text-zinc-400">{option.keyAttributes.map((k) => ATTRIBUTE_META[k].label).join(' · ')}</span>
+                      <span className={cx('text-xs font-bold tabular-nums', tone)}>성공 {chance}%</span>
                     </button>
                   );
                 })}

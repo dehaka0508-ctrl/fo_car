@@ -53,10 +53,10 @@ export function OverviewTab({ game, onOpenTab }: { game: GameState; onOpenTab: (
                   사건에 답하기
                 </Button>
               ) : null}
-              <Button variant="ghost" onClick={() => autoPlay(1)} title="AI가 턴 사이 결정과 경기를 대신 진행합니다">
+              <Button variant="secondary" onClick={() => autoPlay(1)} title="AI가 턴 사이 결정과 경기를 대신 진행합니다">
                 자동 1턴
               </Button>
-              <Button variant="ghost" onClick={() => autoPlay(3)}>
+              <Button variant="secondary" onClick={() => autoPlay(3)}>
                 자동 1시즌
               </Button>
               {canRetire(game) ? (
@@ -154,7 +154,7 @@ export function OverviewTab({ game, onOpenTab }: { game: GameState; onOpenTab: (
             </ul>
           </Card>
         ) : null}
-        <p className="text-[10px] text-zinc-400">데이터: {Object.keys(BASE_WORLD.leagues).length}개 리그 · {Object.keys(BASE_WORLD.clubs).length}개 구단 (샘플)</p>
+        <p className="text-[10px] text-zinc-400">데이터: {Object.keys(BASE_WORLD.leagues).length}개 리그 · {Object.keys(BASE_WORLD.clubs).length}개 구단</p>
       </div>
     </div>
   );

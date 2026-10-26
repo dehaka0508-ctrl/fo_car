@@ -1,6 +1,7 @@
 'use client';
 
 import { Avatar } from '@/components/Avatar';
+import { PlayerStage } from '@/components/pixel/PlayerStage';
 import { AWARD_LABELS } from '@/engine/awards';
 import { BASE_WORLD } from '@/engine/career';
 import { averageRating } from '@/engine/simulator';
@@ -24,10 +25,12 @@ export function RetiredScreen({ game }: { game: GameState }) {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-8">
       <Card className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
-        <Avatar appearance={player.profile.appearance} kit={lastClub ? BASE_WORLD.clubs[lastClub]?.kitColors : null} size={120} />
+        <PlayerStage variant="stage">
+          <Avatar appearance={player.profile.appearance} kit={lastClub ? BASE_WORLD.clubs[lastClub]?.kitColors : null} size={125} idle />
+        </PlayerStage>
         <div className="flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">현역 은퇴</p>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{player.profile.name}</h1>
+          <p className="font-pixel text-xs font-bold text-emerald-400">FULL TIME · 현역 은퇴</p>
+          <h1 className="mt-1 text-2xl font-bold text-zinc-50 drop-shadow-[2px_2px_0_#05080f]">{player.profile.name}</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             {summary?.age ?? player.age}세 은퇴 · {player.profile.startSeason}–{summary?.season ?? game.turn.season} ·{' '}
             {(summary?.clubs ?? []).map((id) => clubLabel(id)).join(' → ')}

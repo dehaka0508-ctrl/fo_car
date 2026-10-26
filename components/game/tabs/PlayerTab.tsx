@@ -27,18 +27,21 @@ export function PlayerTab({ game }: { game: GameState }) {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[...groups.entries()].map(([group, keys]) => (
             <div key={group}>
-              <h3 className="mb-1 text-xs font-semibold text-zinc-500">{ATTRIBUTE_GROUP_LABELS[group]}</h3>
-              <ul className="flex flex-col gap-1">
+              <h3 className="mb-2 text-xs font-bold text-emerald-300">{ATTRIBUTE_GROUP_LABELS[group]}</h3>
+              <ul className="flex flex-col gap-2">
                 {keys.map((key) => (
                   <li key={key} className="flex items-center gap-2 text-xs">
                     <span className="w-16 shrink-0 text-zinc-700 dark:text-zinc-300">
                       {ATTRIBUTE_META[key].label}
                       {(weights[key] ?? 0) >= 0.7 ? <span className="ml-0.5 text-emerald-600">●</span> : null}
                     </span>
-                    <span className="h-2 flex-1 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
-                      <span className="block h-full rounded bg-emerald-500" style={{ width: `${player.attributes[key]}%` }} />
+                    <span className="px-meter mx-[2px] flex-1">
+                      <span
+                        className={player.attributes[key] >= 80 ? 'bg-amber-400' : player.attributes[key] >= 60 ? 'bg-emerald-400' : 'bg-sky-500'}
+                        style={{ width: `${player.attributes[key]}%` }}
+                      />
                     </span>
-                    <span className="w-6 text-right tabular-nums text-zinc-900 dark:text-zinc-100">{player.attributes[key]}</span>
+                    <span className="font-pixel w-6 text-right tabular-nums text-zinc-50">{player.attributes[key]}</span>
                   </li>
                 ))}
               </ul>

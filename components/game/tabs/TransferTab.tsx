@@ -119,8 +119,10 @@ export function TransferTab({ game }: { game: GameState }) {
     clubs: Object.values(game.clubs)
       .filter((c) => c.leagueId === league.id && c.clubId !== contract?.clubId)
       .map((c) => BASE_WORLD.clubs[c.clubId])
-      .sort((a, b) => a.nameKo.localeCompare(b.nameKo, 'ko')),
+      .sort((a, b) => b.power - a.power || a.nameKo.localeCompare(b.nameKo, 'ko')),
   }));
+  const selectedLeagueId = game.clubs[clubId]?.leagueId ?? leagueGroups[0]?.league.id;
+  const leagueClubs = leagueGroups.find((g) => g.league.id === selectedLeagueId)?.clubs ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -163,16 +165,28 @@ export function TransferTab({ game }: { game: GameState }) {
 
         <Card title={`역제의 (남은 횟수 ${remaining}/${TRANSFER_CONFIG.maxCounterOffers})`}>
           <div className="grid gap-2 sm:grid-cols-3">
-            <Field label="구단" className="sm:col-span-3">
+            <Field label="리그" className="sm:col-span-3">
+              <select
+                className={fieldClass}
+                value={selectedLeagueId}
+                onChange={(e) => {
+                  const first = leagueGroups.find((g) => g.league.id === e.target.value)?.clubs[0];
+                  if (first) setClubId(first.id);
+                }}
+              >
+                {leagueGroups.map(({ league }) => (
+                  <option key={league.id} value={league.id}>
+                    {BASE_WORLD.nations[league.nation]?.nameKo} · {league.nameKo}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={`구단 (${leagueClubs.length}개 · 실력순)`} className="sm:col-span-3">
               <select className={fieldClass} value={clubId} onChange={(e) => setClubId(e.target.value)}>
-                {leagueGroups.map(({ league, clubs }) => (
-                  <optgroup key={league.id} label={league.nameKo}>
-                    {clubs.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nameKo}
-                      </option>
-                    ))}
-                  </optgroup>
+                {leagueClubs.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nameKo}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -210,7 +224,9 @@ export function TransferTab({ game }: { game: GameState }) {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">받은 오퍼 ({game.offers.filter((o) => o.status === 'PENDING').length})</h2>
+        <h2 className="mb-3 inline-block bg-zinc-950/80 px-2 py-1 text-xs font-bold text-amber-300 shadow-[0_0_0_2px_rgb(5_8_15/0.6)]">
+          받은 오퍼 ({game.offers.filter((o) => o.status === 'PENDING').length})
+        </h2>
         {game.offers.length ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {game.offers.map((offer) => (
