@@ -13,8 +13,10 @@ interface AvatarProps {
   outfit?: AvatarOutfit;
   /** 손에 든 트로피 */
   trophy?: AvatarTrophy | null;
-  /** 높이(px). 도트가 고르게 보이도록 25px 단위로 맞춘다 */
+  /** 높이(px). 도트가 고르게 보이도록 43px(도트 1줄 = 1px) 단위로 맞춘다 */
   size?: number;
+  /** 발밑에 공 (유니폼일 때) */
+  ball?: boolean;
   label?: string;
   /** 제자리에서 통통 튀는 대기 동작 */
   idle?: boolean;
@@ -22,13 +24,13 @@ interface AvatarProps {
 }
 
 /**
- * 8비트 SD 도트 선수 (전신). 피부·머리·눈동자 색과 유니폼 색(kitColors)을 입힌다.
+ * 3등신 도트 선수 (전신). 피부·머리·눈동자 색과 유니폼 색(kitColors)을 입힌다.
  * - 평소: 소속팀 유니폼 / 국가대표 경기: 국가대표 유니폼 (kit)
  * - 발롱도르·FIFA 시상식: 턱시도 + 트로피 (outfit, trophy)
  */
-export function Avatar({ appearance, kit, outfit = 'KIT', trophy = null, size = 100, label = '선수 아바타', idle = false, className }: AvatarProps) {
+export function Avatar({ appearance, kit, outfit = 'KIT', trophy = null, ball = false, size = 86, label = '선수 아바타', idle = false, className }: AvatarProps) {
   const scale = Math.max(1, Math.round(size / SPRITE_HEIGHT));
-  const rects = buildSprite({ appearance, kit, outfit, trophy });
+  const rects = buildSprite({ appearance, kit, outfit, trophy, ball });
   return (
     <svg
       viewBox={`0 0 ${SPRITE_WIDTH} ${SPRITE_HEIGHT}`}

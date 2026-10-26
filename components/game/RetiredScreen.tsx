@@ -26,7 +26,7 @@ export function RetiredScreen({ game }: { game: GameState }) {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-8">
       <Card className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
         <PlayerStage variant="stage">
-          <Avatar appearance={player.profile.appearance} kit={lastClub ? BASE_WORLD.clubs[lastClub]?.kitColors : null} size={125} idle />
+          <Avatar appearance={player.profile.appearance} kit={lastClub ? BASE_WORLD.clubs[lastClub]?.kitColors : null} size={129} ball idle />
         </PlayerStage>
         <div className="flex-1">
           <p className="font-pixel text-xs font-bold text-emerald-400">FULL TIME · 현역 은퇴</p>

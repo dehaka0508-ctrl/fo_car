@@ -20,7 +20,7 @@ export function PlayerHeader({ game }: { game: GameState }) {
     <Card className="flex flex-col gap-4 sm:flex-row sm:items-center">
       <div className="flex items-center gap-4">
         <PlayerStage>
-          <Avatar appearance={player.profile.appearance} kit={club?.kitColors} size={100} idle />
+          <Avatar appearance={player.profile.appearance} kit={club?.kitColors} size={129} ball idle />
         </PlayerStage>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

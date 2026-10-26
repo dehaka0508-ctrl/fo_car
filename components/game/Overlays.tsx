@@ -37,7 +37,7 @@ function CeremonyStage({ ceremony }: { ceremony: Ceremony }) {
           kit={kit}
           outfit={isWorld ? 'TUXEDO' : 'KIT'}
           trophy={trophy}
-          size={isWorld ? 125 : 100}
+          size={129}
           idle={Boolean(trophy)}
           label={isWorld ? `${player.profile.name} (턱시도)` : player.profile.name}
         />

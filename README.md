@@ -9,7 +9,7 @@
   바둑돌 하이라이트 연출(패스 궤적·골망·태클·선방), 상황별 아바타 의상(국가대표 유니폼·시상식 턱시도+트로피),
   커뮤니티 공유용 커리어 요약·텍스트 복사.
 - **4단계 (현재)**: 엑셀 구단 DB(**47개 리그 · 801개 구단**, 2025/26 실적·유니폼 색·레전드) 적용, 이적 오퍼의 권역 2단계 선택,
-  UI 리디자인 — **밤 경기장 배경 + 8비트 SD 도트 전신 캐릭터**(유니폼은 DB의 구단 색) + 픽셀 폰트.
+  UI 리디자인 — **밤 경기장 배경 + 3등신 도트 전신 캐릭터**(유니폼은 DB의 구단 색) + 픽셀 폰트.
 
 ## 실행
 
@@ -57,7 +57,7 @@ fo_car/
 │   ├── page.tsx                 커리어 게임
 │   └── sandbox/page.tsx         엔진 샌드박스 + 구단 DB 현황 (47개 리그 슬롯)
 ├── components/
-│   ├── Avatar.tsx               8비트 SD 도트 선수(전신) · 바둑돌 토큰
+│   ├── Avatar.tsx               3등신 도트 선수(전신) · 바둑돌 토큰
 │   ├── pixel/                   sprite.ts (도트 격자 · 유니폼 색 · 턱시도 · 트로피) · PlayerStage(잔디/레드카펫 무대) · 도트 아이콘
 │   ├── StadiumBackdrop.tsx      배경: 밤하늘 · 조명탑 · 관중석 · LED 광고판 · 잔디
 │   ├── game/                    ★ 플레이 UI
@@ -262,8 +262,10 @@ OVR 78 이상 · 31세 이하 선수는 출전 시간 경쟁을 감수하고(출
 
 ### UI 리디자인: 밤 경기장 + 8비트
 - **배경**(`StadiumBackdrop`): 계단식 밤하늘과 별, 조명탑과 빛, 2층 관중석(도트 관중), 흐르는 LED 광고판, 줄무늬 잔디와 라인.
-- **도트 캐릭터**(`components/pixel/sprite.ts`): 16 × 25 도트 SD 전신. 피부·머리·눈동자 색, 소속팀(또는 국가대표) 유니폼 색을 입힙니다.
-  줄무늬 유니폼은 상의 몸통에 1-2-2-2-1 세로줄, 반바지·양말은 `kitColors.shorts/socks`가 없으면 상의 색에서 만듭니다.
+- **도트 캐릭터**(`components/pixel/sprite.ts`): 24 × 43 도트, 머리가 키의 1/3인 3등신 전신. 부위별로 색을 칠한 뒤 바깥 테두리를 자동으로 두르고,
+  빛은 왼쪽 위에서 오는 것으로 그늘·하이라이트를 넣었습니다. 피부·머리·눈동자 색, 소속팀(또는 국가대표) 유니폼 색을 입힙니다.
+  줄무늬 유니폼은 상의 몸통에 2칸씩 세로줄, 양말 윗단은 칼라색 줄입니다. 반바지는 `kitColors.shorts`가 없으면
+  줄무늬 유니폼은 두 색 중 어두운 색, 밝은 단색(흰색·노랑)은 짙은 색, 그 밖은 흰색으로 정합니다. 프로필·생성 화면에서는 발밑에 공이 있습니다.
   시상식은 턱시도 + 발롱도르(황금공)/FIFA 트로피를 두 손으로 듭니다. 같은 색 도트를 가로로 합쳐 SVG 사각형 수를 줄였습니다.
 - **UI 조각**: 계단 모서리 도트 패널, 눌리는 도트 버튼, 칸이 나뉜 게이지(HP 바), 전광판 스타일 탭·상단 바·하이라이트 스코어보드,
   잔디/레드카펫 무대(`PlayerStage`) 위 캐릭터. 제목·버튼·숫자는 픽셀 폰트 갈무리11(OFL), 본문은 시스템 산세리프입니다.
@@ -283,7 +285,7 @@ ClubDefinition.kitColors: KitColors        // 필수
 NationDefinition.kitColors?: KitColors     // 선택 (없으면 기본색)
 ```
 
-- 도트 캐릭터(`components/pixel/sprite.ts`)는 `secondary`가 있으면 상의 몸통 8칸을 `primary · secondary · primary · secondary · primary`(1-2-2-2-1칸) 세로 줄무늬로 칠합니다.
+- 도트 캐릭터(`components/pixel/sprite.ts`)는 `secondary`가 있으면 상의 몸통 10칸을 `primary · secondary · primary · secondary · primary`(2칸씩) 세로 줄무늬로 칠합니다.
 - `data/clubs.ts`의 행 형식은 `[id, name, nameKo, shortName, power, prestige, finance, primary, secondary|null, rivals, options?]`이고, `defineLeague`가 `kitColors: { primary, secondary }`로 바꿔 줍니다.
 - 외부 JSON은 `kitColors: { primary, secondary }`(또는 `colors: [p, s]`, `primaryColor`/`secondaryColor`)로 넣으면 되고, 빈 `secondary`는 로더가 `null`로 바꿉니다.
 - 가로 줄무늬·하프 유니폼(예: QPR, 그라나다)은 지금은 대표색 단색으로 근사합니다.

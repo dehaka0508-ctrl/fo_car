@@ -247,7 +247,7 @@ export function SimulationSandbox() {
           {/* 프로필 */}
           <section className={`${cardClass} flex flex-col gap-4 sm:flex-row`} aria-label="선수 프로필">
             <div className="flex flex-col items-center gap-2">
-              <Avatar appearance={player.profile.appearance} kit={club.kitColors} size={112} />
+              <Avatar appearance={player.profile.appearance} kit={club.kitColors} size={129} ball />
               <span className="text-xs text-zinc-500">{club.nameKo}</span>
             </div>
             <div className="flex flex-1 flex-col gap-3">

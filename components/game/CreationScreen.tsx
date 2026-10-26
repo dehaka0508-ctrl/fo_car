@@ -221,7 +221,7 @@ export function CreationScreen() {
 
         <Card className="order-first flex flex-col items-center gap-4 self-start text-center lg:order-none">
           <PlayerStage className="w-full">
-            <Avatar appearance={input.appearance} kit={club.kitColors} size={150} idle />
+            <Avatar appearance={input.appearance} kit={club.kitColors} size={172} ball idle />
           </PlayerStage>
           <div>
             <p className="font-pixel text-base font-bold text-zinc-50">{input.name}</p>

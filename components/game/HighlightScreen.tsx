@@ -374,7 +374,7 @@ export function HighlightScreen() {
           <div className="flex min-w-0 items-center gap-3">
             {appearance ? (
               <PlayerStage className="hidden sm:flex">
-                <Avatar appearance={appearance} kit={myKit} size={75} idle label={`${briefing.protagonist.name} (경기 유니폼)`} />
+                <Avatar appearance={appearance} kit={myKit} size={86} idle label={`${briefing.protagonist.name} (경기 유니폼)`} />
               </PlayerStage>
             ) : null}
             <PlayerToken kit={myKit} size={22} />
