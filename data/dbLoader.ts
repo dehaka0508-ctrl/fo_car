@@ -21,6 +21,7 @@
  */
 import type {
   ClubDefinition,
+  ClubLastSeason,
   ClubLegend,
   HistoricRecord,
   ID,
@@ -31,6 +32,7 @@ import type {
   RecordCategory,
 } from '@/types/game';
 import { CLUBS as SAMPLE_CLUBS } from './clubs';
+import { DERBIES } from './derbies';
 import { CLUB_LEGENDS, HISTORIC_RECORDS } from './legends';
 import { LEAGUE_SLOTS } from './leagues';
 import { NATIONS } from './nations';
@@ -53,6 +55,9 @@ export interface DbReport {
   leagues: Array<{ id: ID; nameKo: string; source: LeagueSource; clubs: number; teamCount: number | null; active: boolean }>;
   /** 정규화로 고친 항목 수 */
   fixes: { emptySecondary: number; missingLegends: number; defaultedStats: number; droppedRivals: number; droppedLegends: number };
+  /** 엔진 척도로 환산한 파일 · 더비 목록에서 연결한 수 */
+  scaledFiles: string[];
+  derbiesLinked: number;
   warnings: string[];
 }
 
@@ -273,6 +278,12 @@ export function resolveLeague(
     const raw = text(value);
     if (!raw) return null;
     if (slots[raw]) return slots[raw];
+    // 'eng_1' · 'KOR-2' 형식: 국가 코드 + 부
+    const coded = /^([a-z]{3})[_-]?(\d)$/i.exec(raw);
+    if (coded) {
+      const found = Object.values(slots).find((l) => l.nation === coded[1].toUpperCase() && l.tier === Number(coded[2]));
+      if (found) return found;
+    }
     const key = normalizeKey(raw);
     if (!key) return null;
     return Object.values(slots).find((l) => leagueKeys(l).includes(key)) ?? null;
@@ -313,13 +324,41 @@ interface LeagueBlock {
   clubs: Raw[];
 }
 
+/** 구단 행에 적힌 리그: leagueId에 국가·부(country, tier)가 함께 있으면 둘 다 담아 찾기 쉽게 한다 */
+function clubLeagueRef(club: Raw): unknown {
+  const id = pick(club, 'leagueId', 'league', 'league_id', 'competition');
+  const country = pick(club, 'leagueCountry', 'country', 'nation');
+  const tier = pick(club, 'tier', 'division', 'level');
+  if (id === undefined && country === undefined) return null;
+  if (isObject(id)) return id;
+  return country !== undefined || tier !== undefined ? { id, country, tier } : id;
+}
+
+/** 파일의 meta.scale: 외부 DB 점수를 엔진 척도로 바꾸는 규칙 */
+export interface DbScale {
+  power?: { pivot: number; factor: number };
+  prestige?: { offset?: number; factor?: number; pivot?: number };
+  finance?: { offset?: number; factor?: number; pivot?: number };
+}
+
+function scaleOf(data: unknown): DbScale | null {
+  if (!isObject(data) || !isObject(data.meta) || !isObject(data.meta.scale)) return null;
+  return data.meta.scale as DbScale;
+}
+
+function applyScale(value: number, rule: { pivot?: number; factor?: number; offset?: number } | undefined): number {
+  if (!rule) return value;
+  const pivot = rule.pivot ?? 0;
+  return pivot + (value - pivot) * (rule.factor ?? 1) + (rule.offset ?? 0);
+}
+
 /** 파일 하나를 '리그 블록' 목록으로 펼친다. 여러 형태를 받는다. */
 function blocksOf(data: unknown): LeagueBlock[] {
   // [ {club, league?}, ... ]
   if (Array.isArray(data)) {
     const groups = new Map<string, LeagueBlock>();
     for (const club of data.filter(isObject)) {
-      const ref = pick(club, 'leagueId', 'league', 'league_id', 'competition') ?? null;
+      const ref = clubLeagueRef(club);
       const key = JSON.stringify(ref);
       if (!groups.has(key)) groups.set(key, { ref, clubs: [] });
       groups.get(key)!.clubs.push(club);
@@ -333,11 +372,18 @@ function blocksOf(data: unknown): LeagueBlock[] {
       Array.isArray(league.clubs) ? [{ ref: pick(league, 'league', 'leagueId') ?? league, clubs: league.clubs.filter(isObject) }] : [],
     );
   }
-  // { league: ..., clubs: [...] }
+  // { league: ..., clubs: [...] } — 구단마다 leagueId가 있으면 그것을 따른다
   if (Array.isArray(data.clubs) || Array.isArray(data.teams)) {
     const clubs = ((data.clubs ?? data.teams) as unknown[]).filter(isObject);
-    const ref = pick(data, 'league', 'leagueId', 'league_id', 'competition') ?? (data.country || data.nation ? data : null);
-    return [{ ref, clubs }];
+    const fileRef = pick(data, 'league', 'leagueId', 'league_id', 'competition') ?? (data.country || data.nation ? data : null);
+    const groups = new Map<string, LeagueBlock>();
+    for (const club of clubs) {
+      const ref = clubLeagueRef(club) ?? fileRef;
+      const key = JSON.stringify(ref);
+      if (!groups.has(key)) groups.set(key, { ref, clubs: [] });
+      groups.get(key)!.clubs.push(club);
+    }
+    return [...groups.values()];
   }
   // { ITA_SA: [...], ITA_SB: [...] }
   const entries = Object.entries(data);
@@ -353,6 +399,63 @@ interface ParsedClub {
   records: HistoricRecord[];
 }
 
+const HANGUL = /[가-힣]/;
+const ABBR_STOP = new Set(['fc', 'cf', 'afc', 'sc', 'ac', 'as', 'ss', 'ssc', 'us', 'cd', 'ud', 'rcd', 'sd', 'club', 'de', 'del', 'la', 'le', 'the', 'sv', 'fk', 'sk', 'nk', 'if', 'bk', 'ik', 'cp', 'sa', 'ca']);
+
+/** 영문명으로 3글자 약칭: 'Manchester City' → MCI, 'Paris Saint-Germain' → PSG, 'Arsenal' → ARS */
+export function abbreviate(name: string): string {
+  const words = name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
+  const core = words.filter((w) => !ABBR_STOP.has(w.toLowerCase()) && !/^\d+$/.test(w));
+  const use = core.length ? core : words;
+  if (!use.length) return '';
+  if (use.length >= 3) return use.slice(0, 3).map((w) => w[0]).join('').toUpperCase();
+  if (use.length === 2) return (use[0][0] + use[1].slice(0, 2)).toUpperCase();
+  return use[0].slice(0, 3).toUpperCase();
+}
+
+/** 외부 DB 레전드 객체({ iconicPlayers, topScorer, ... })의 포지션 표기 */
+const ICONIC_POSITION: Record<string, Position> = { FW: 'ST', MF: 'CM', DF: 'CB', GK: 'GK' };
+
+/** 다음 시즌 대륙 대회 표기 → 대회 id (게임에 없는 2부 대회는 null) */
+const CONTINENTAL_CODE: Record<string, ID | null> = {
+  UCL: 'UEFA_CL', UEL: 'UEFA_EL', UECL: 'UEFA_ECL', ACL: 'AFC_CL', ACLE: 'AFC_CL', LIB: 'CONMEBOL_LIB',
+  CCC: 'CONCACAF_CC', CAFCL: 'CAF_CL', ACL2: null, SUD: null, CAFCC: null, NONE: null,
+};
+
+function parseContinental(v: unknown): ID | null | undefined {
+  const raw = text(v);
+  if (raw === null) return undefined;
+  const key = raw.toUpperCase().replace(/[^A-Z0-9_]/g, '');
+  if (key in CONTINENTAL_CODE) return CONTINENTAL_CODE[key];
+  if (['UEFA_CL', 'UEFA_EL', 'UEFA_ECL', 'AFC_CL', 'CONMEBOL_LIB', 'CONCACAF_CC', 'CAF_CL'].includes(key)) return key;
+  return undefined;
+}
+
+function parseLastSeason(
+  raw: Raw,
+  league: LeagueDefinition,
+  slots: Record<ID, LeagueDefinition>,
+  nations: Record<string, NationDefinition>,
+): ClubLastSeason | undefined {
+  const source = isObject(raw.season2526) ? raw.season2526 : isObject(raw.lastSeason) ? raw.lastSeason : null;
+  if (!source) return undefined;
+  const leagueRank = numeric(pick(source, 'leagueRank', 'rank', 'position'));
+  const previous = text(pick(source, 'previousLeagueId', 'previousLeague', 'fromLeague'));
+  let movement: ClubLastSeason['movement'] = null;
+  if (previous) {
+    const prev = resolveLeague(previous, '', slots, nations);
+    if (prev && prev.id !== league.id) movement = prev.tier < league.tier ? 'DOWN' : prev.tier > league.tier ? 'UP' : null;
+    // 데이터에 없는 리그(하부 리그 등)에서 왔으면 승격으로 본다
+    if (!prev) movement = 'UP';
+  }
+  const continental = parseContinental(pick(source, 'continentalQualified', 'continental', 'nextContinental'));
+  return { leagueRank: leagueRank !== null ? Math.round(leagueRank) : null, movement, ...(continental !== undefined ? { continental } : {}) };
+}
+
 function parseClub(
   raw: Raw,
   league: LeagueDefinition,
@@ -360,43 +463,68 @@ function parseClub(
   nations: Record<string, NationDefinition>,
   report: DbReport,
   where: string,
+  scale: DbScale | null,
+  slots: Record<ID, LeagueDefinition>,
 ): ParsedClub | null {
-  const name = text(pick(raw, 'name', 'nameEn', 'name_en', 'englishName', 'fullName'));
-  const nameKo = text(pick(raw, 'nameKo', 'name_ko', 'koreanName', 'nameKR', 'name_kr', 'korName'));
-  if (!name && !nameKo) {
+  const nameRaw = text(pick(raw, 'name', 'fullName', 'clubName'));
+  const nameEnRaw = text(pick(raw, 'nameEn', 'name_en', 'englishName', 'originalName'));
+  const nameKoRaw = text(pick(raw, 'nameKo', 'name_ko', 'koreanName', 'nameKR', 'name_kr', 'korName'));
+  // name이 한글이면 한글명으로, 영문명은 nameEn에서
+  const nameKo = nameKoRaw ?? (nameRaw && HANGUL.test(nameRaw) ? nameRaw : null);
+  const english = nameEnRaw ?? (nameRaw && !HANGUL.test(nameRaw) ? nameRaw : null);
+  if (!nameKo && !english) {
     report.warnings.push(`${where}: ${index + 1}번째 구단에 이름이 없어 건너뜀`);
     return null;
   }
-  const displayName = name ?? nameKo!;
+  const displayName = english ?? nameKo!;
   const id = text(pick(raw, 'id', 'clubId', 'club_id', 'slug', 'key')) ?? (slugify(displayName) || `${league.id.toLowerCase()}-${index + 1}`);
-  const ascii = displayName.normalize('NFKD').replace(/[^A-Za-z]/g, '');
-  const shortName = (text(pick(raw, 'shortName', 'short_name', 'short', 'abbr', 'abbreviation', 'code', 'tla')) ?? (ascii.slice(0, 3) || id.slice(0, 3))).toUpperCase().slice(0, 4);
+  const shortName = (text(pick(raw, 'shortName', 'short_name', 'short', 'abbr', 'abbreviation', 'code', 'tla')) ?? (abbreviate(displayName) || id.slice(0, 3))).toUpperCase().slice(0, 4);
 
-  const nationRaw = pick(raw, 'nation', 'country', 'nationCode', 'nationality');
+  // 리그 국가에 독립 대표팀·리그가 없는 구단(모나코·안도라·웨일스 등)은 리그 국가로 본다
+  const nationRaw = pick(raw, 'nation', 'nationCode', 'nationality', 'country');
   const nation = nationCode(nationRaw, nations) ?? league.nation;
-  if (nationRaw !== undefined && !nationCode(nationRaw, nations)) report.warnings.push(`${where}: ${displayName}의 국가 '${String(nationRaw)}'를 몰라 ${league.nation}로 처리`);
 
-  const hidden = isObject(raw.hidden) ? raw.hidden : isObject(raw.stats) ? raw.stats : raw;
-  const stat = (keys: string[], fallback: number) => {
+  const hidden = isObject(raw.hiddenStats) ? raw.hiddenStats : isObject(raw.hidden) ? raw.hidden : isObject(raw.stats) ? raw.stats : raw;
+  const stat = (keys: string[], fallback: number, rule?: { pivot?: number; factor?: number; offset?: number }) => {
     const value = numeric(pick(hidden, ...keys));
     if (value === null) {
       report.fixes.defaultedStats++;
       return fallback;
     }
-    return Math.round(Math.min(99, Math.max(1, value)));
+    return Math.round(Math.min(99, Math.max(1, applyScale(value, rule))));
   };
-  const power = stat(['power', 'strength', 'rating', 'overall', 'teamPower', 'skill', '실력'], league.strength);
-  const prestige = stat(['prestige', 'reputation', 'fame', 'popularity', '명성'], Math.max(10, league.strength - 12));
-  const finance = stat(['finance', 'budget', 'wealth', 'money', 'finances', '재정'], Math.max(10, league.strength - 12));
+  const power = stat(['power', 'strength', 'rating', 'overall', 'teamPower', 'skill', '실력'], league.strength, scale?.power);
+  const prestige = stat(['prestige', 'reputation', 'fame', 'popularity', '명성'], Math.max(10, league.strength - 12), scale?.prestige);
+  const finance = stat(['finance', 'budget', 'wealth', 'money', 'finances', '재정'], Math.max(10, league.strength - 12), scale?.finance);
 
   const kit = normalizeKitColors(raw);
   if (kit.emptySecondary) report.fixes.emptySecondary++;
   if (kit.missingPrimary) report.warnings.push(`${where}: ${displayName}의 유니폼 색이 없어 회색으로 처리`);
 
   const legendsRaw = pick(raw, 'legends', 'clubLegends', 'club_legends');
-  const { legends, dropped } = normalizeLegends(legendsRaw, nations);
+  let legends: ClubLegend[] | null;
+  const legendRecords: HistoricRecord[] = [];
+  if (isObject(legendsRaw)) {
+    // { topScorer, topAssister, mostApps, iconicPlayers: { FW, MF, DF, GK } }
+    const iconic = isObject(legendsRaw.iconicPlayers) ? legendsRaw.iconicPlayers : {};
+    legends = Object.entries(iconic)
+      .map(([pos, name]) => ({ pos: normalizePosition(pos) ?? ICONIC_POSITION[pos.toUpperCase()], name: text(name) }))
+      .filter((l): l is { pos: Position; name: string } => Boolean(l.pos && l.name))
+      .map((l) => ({ name: l.name, position: l.pos, era: '' }));
+    const records: Array<[string, RecordCategory]> = [['topScorer', 'GOALS'], ['topAssister', 'ASSISTS'], ['mostApps', 'APPEARANCES'], ['mostCleanSheets', 'CLEAN_SHEETS']];
+    for (const [key, category] of records) {
+      const entry = legendsRaw[key];
+      const holderName = isObject(entry) ? text(entry.name) : null;
+      const value = isObject(entry) ? numeric(entry.value) : null;
+      if (holderName && value !== null) legendRecords.push({ scope: 'CLUB', scopeId: id, category, holderName, value });
+    }
+    if (!legends.length) legends = null;
+  } else {
+    const normalized = normalizeLegends(legendsRaw, nations);
+    legends = normalized.legends;
+    report.fixes.droppedLegends += normalized.dropped;
+  }
   if (legends === null) report.fixes.missingLegends++;
-  report.fixes.droppedLegends += dropped;
 
   const rivalsRaw = pick(raw, 'rivals', 'rivalIds', 'derbies', 'rival');
   const rivalRefs = (Array.isArray(rivalsRaw) ? rivalsRaw : rivalsRaw !== undefined ? [rivalsRaw] : []).map(text).filter((r): r is string => Boolean(r));
@@ -417,7 +545,9 @@ function parseClub(
     ...(reserve ? { promotionEligible: false } : {}),
     ...(legends && legends.length ? { legends } : {}),
   };
-  return { club, rivalRefs, records: normalizeRecords(pick(raw, 'records', 'clubRecords'), id) };
+  const lastSeason = parseLastSeason(raw, league, slots, nations);
+  if (lastSeason) club.lastSeason = lastSeason;
+  return { club, rivalRefs, records: [...normalizeRecords(pick(raw, 'records', 'clubRecords'), id), ...legendRecords] };
 }
 
 // ============================================================================
@@ -432,6 +562,7 @@ export interface BuildDatabaseInput {
   records?: HistoricRecord[];
   nations?: Record<string, NationDefinition>;
   minClubsPerLeague?: number;
+  derbies?: ReadonlyArray<readonly [string, string, string]>;
 }
 
 export function buildDatabase(input: BuildDatabaseInput): GameDatabase {
@@ -443,6 +574,8 @@ export function buildDatabase(input: BuildDatabaseInput): GameDatabase {
     files: [],
     leagues: [],
     fixes: { emptySecondary: 0, missingLegends: 0, defaultedStats: 0, droppedRivals: 0, droppedLegends: 0 },
+    scaledFiles: [],
+    derbiesLinked: 0,
     warnings: [],
   };
 
@@ -452,6 +585,8 @@ export function buildDatabase(input: BuildDatabaseInput): GameDatabase {
   for (const file of input.files) {
     const stem = fileStem(file.path);
     const blocks = blocksOf(file.data);
+    const scale = scaleOf(file.data);
+    if (scale) report.scaledFiles.push(file.path);
     const fileLeagues: ID[] = [];
     let fileClubs = 0;
     if (!blocks.length) report.warnings.push(`${file.path}: 구단 목록을 찾지 못함 (형식은 data/external/README.md 참고)`);
@@ -464,7 +599,7 @@ export function buildDatabase(input: BuildDatabaseInput): GameDatabase {
       Object.assign((overrides[league.id] ??= {}), leagueOverrides(block.ref));
       const bucket = external.get(league.id) ?? new Map<ID, ParsedClub>();
       block.clubs.forEach((raw, i) => {
-        const parsed = parseClub(raw, league, i, nations, report, `${file.path} · ${league.nameKo}`);
+        const parsed = parseClub(raw, league, i, nations, report, `${file.path} · ${league.nameKo}`, scale, slots);
         if (!parsed) return;
         if (bucket.has(parsed.club.id)) report.warnings.push(`${file.path}: 구단 id '${parsed.club.id}'가 중복되어 뒤의 것을 씀`);
         bucket.set(parsed.club.id, parsed);
@@ -533,6 +668,24 @@ export function buildDatabase(input: BuildDatabaseInput): GameDatabase {
     clubs[club.id] = { ...club, rivals };
   }
 
+  // 4-2) 더비 목록(data/derbies.ts): 외부 DB에 더비 정보가 없어도 유명 더비를 잇는다
+  const byName = new Map<string, ClubDefinition[]>();
+  for (const club of Object.values(clubs)) {
+    for (const key of new Set([normalizeKey(club.name), normalizeKey(club.nameKo)])) {
+      if (key) byName.set(key, [...(byName.get(key) ?? []), club]);
+    }
+  }
+  const findIn = (nation: string, name: string) =>
+    (byName.get(normalizeKey(name)) ?? []).find((c) => c.nation === nation || slots[c.leagueId]?.nation === nation);
+  for (const [nation, a, b] of input.derbies ?? DERBIES) {
+    const ca = findIn(nation, a);
+    const cb = findIn(nation, b);
+    if (!ca || !cb || ca.id === cb.id) continue;
+    if (!clubs[ca.id].rivals.includes(cb.id)) clubs[ca.id] = { ...clubs[ca.id], rivals: [...clubs[ca.id].rivals, cb.id] };
+    if (!clubs[cb.id].rivals.includes(ca.id)) clubs[cb.id] = { ...clubs[cb.id], rivals: [...clubs[cb.id].rivals, ca.id] };
+    report.derbiesLinked++;
+  }
+
   // 5) 레전드 · 기록: 외부 구단의 것이 내장 데이터보다 우선
   const legends: Record<ID, ClubLegend[]> = { ...(input.legends ?? CLUB_LEGENDS) };
   for (const club of Object.values(clubs)) if (club.legends?.length) legends[club.id] = club.legends;
@@ -543,7 +696,12 @@ export function buildDatabase(input: BuildDatabaseInput): GameDatabase {
 
   // 6) 활성 리그 정의: 덮어쓰기 적용 + 승강 연결 정리
   const leagues: Record<ID, LeagueDefinition> = {};
-  for (const id of active) leagues[id] = { ...slots[id], ...overrides[id] };
+  for (const id of active) {
+    // 외부 DB 리그의 수준 = 소속 구단 실력 평균 (명시적으로 덮어쓰지 않았다면)
+    const members = Object.values(clubs).filter((c) => c.leagueId === id);
+    const strength = external.has(id) && members.length ? Math.round(members.reduce((sum, c) => sum + c.power, 0) / members.length) : slots[id].strength;
+    leagues[id] = { ...slots[id], strength, ...overrides[id] };
+  }
   for (const league of Object.values(leagues)) {
     if (league.lowerLeagueId && !leagues[league.lowerLeagueId]) {
       leagues[league.id] = { ...leagues[league.id], lowerLeagueId: undefined, relegationSlots: 0 };

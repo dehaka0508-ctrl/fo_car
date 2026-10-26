@@ -9,7 +9,8 @@ import { BASE_WORLD, createCareer } from '@/engine/career';
 import { syncSaveWithDatabase } from '@/engine/dbSync';
 import { simulateFullSeason } from '@/engine/league';
 import { applyPromotionRelegation } from '@/engine/seasonEnd';
-import { locality, proximity } from '@/engine/transfer';
+import { offerRegionShares, pickOfferClub, playerProximity, proximity, type Proximity } from '@/engine/transfer';
+import { rngFor } from '@/engine/rng';
 import { createInitialClubStates, legendsFor, type SimulationWorld } from '@/engine/world';
 
 const serieA = { path: 'ITA_SA.json', data: example };
@@ -141,6 +142,26 @@ describe('외부 DB 병합', () => {
 });
 
 describe('세이브 ↔ DB 동기화', () => {
+  it('내장 샘플 구단이 외부 DB의 같은 구단(다른 id)으로 바뀌면 이름으로 찾아 옮긴다', () => {
+    const state = createCareer(
+      { name: '테스트', nationality: 'KOR', role: { position: 'ST', playStyle: 'POACHER' }, heightCm: 182, weightKg: 76, appearance: { hair: 'BLACK', skin: 3, eyes: 'DARK_BROWN' }, clubId: 'ulsan' },
+      { seed: 3 },
+    );
+    const k1 = ['Ulsan HD', 'Pohang Steelers', 'Jeonbuk Hyundai Motors', 'FC Seoul'].map((name) => ({
+      id: `kor_1_${name.toLowerCase().replace(/ /g, '_')}`,
+      name,
+      kitColors: { primary: '#1D4DA1', secondary: '' },
+    }));
+    const db = buildDatabase({ files: [{ path: 'k1.json', data: { league: 'KOR_K1', clubs: k1 } }] });
+    const synced = syncSaveWithDatabase(state, worldFrom(db), db.signature);
+    expect(synced.player.contract?.clubId).toBe('kor_1_ulsan_hd');
+    expect(synced.player.clubHistory[0].clubId).toBe('kor_1_ulsan_hd');
+    expect(synced.clubs.ulsan).toBeUndefined();
+    expect(synced.clubs.kor_1_ulsan_hd.power).toBe(state.clubs.ulsan.power);
+    expect(synced.notices.some((n) => n.title === '구단 데이터 갱신')).toBe(true);
+    expect(synced.notices.some((n) => n.title === '구단 데이터 변경')).toBe(false);
+  });
+
   it('소속 구단이 사라지면 FA가 되고, 새 구단은 추가된다', () => {
     const state = createCareer(
       { name: '테스트', nationality: 'ENG', role: { position: 'ST', playStyle: 'POACHER' }, heightCm: 182, weightKg: 76, appearance: { hair: 'BLACK', skin: 3, eyes: 'DARK_BROWN' }, clubId: 'arsenal' },
@@ -174,19 +195,42 @@ describe('이적 지역성', () => {
     expect(proximity(BASE_WORLD, 'KOR', 'arsenal')).toBe('ELSEWHERE');
   });
 
-  it('유망주의 이적·임대 관심은 자국 하부 리그 > 같은 대륙 > 다른 대륙', () => {
-    const domesticLower = locality(youth, BASE_WORLD, 'suwon-samsung', 'LOAN');
-    const domestic = locality(youth, BASE_WORLD, 'pohang', 'LOAN');
-    const asia = locality(youth, BASE_WORLD, 'al-hilal', 'LOAN');
-    const europe = locality(youth, BASE_WORLD, 'stoke', 'LOAN');
-    expect(domesticLower).toBeGreaterThan(domestic);
-    expect(domestic).toBeGreaterThan(asia * 3);
-    expect(asia).toBeGreaterThan(europe * 3);
+  /** 오퍼 n개를 뽑아 권역별 비율을 센다 */
+  function regionMix(state: typeof youth, mode: 'TRANSFER' | 'LOAN', n = 600) {
+    const rng = rngFor(42, 'region-mix');
+    const counts: Record<Proximity, number> = { SAME_NATION: 0, NEIGHBOR: 0, SAME_CONFEDERATION: 0, ELSEWHERE: 0 };
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      const id = pickOfferClub(state, BASE_WORLD, mode, new Set([state.player.contract!.clubId]), rng);
+      if (!id) continue;
+      counts[playerProximity(state, BASE_WORLD, id)]++;
+      total++;
+    }
+    return Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, v / Math.max(1, total)])) as Record<Proximity, number>;
+  }
+
+  it('유망주 오퍼는 권역을 먼저 정해 자국 중심으로 온다 (먼 나라 구단 수에 밀리지 않는다)', () => {
+    const shares = offerRegionShares(youth)!;
+    expect(shares.SAME_NATION).toBeGreaterThan(0.5);
+    expect(shares.ELSEWHERE).toBeLessThan(0.1);
+    const mix = regionMix(youth, 'TRANSFER');
+    expect(mix.SAME_NATION).toBeGreaterThan(0.5);
+    expect(mix.ELSEWHERE).toBeLessThan(0.15);
   });
 
-  it('명성이 높은 성인 선수에게는 지역성이 사라진다', () => {
+  it('임대는 더 강하게 자국 중심이고, 자국 하부 리그를 선호한다', () => {
+    // 1군 경쟁이 어려운 19세 (임대 대상 구단이 생기는 실력)
+    const loanee = { ...youth, player: { ...youth.player, age: 19, ovr: 64 } };
+    const mix = regionMix(loanee, 'LOAN');
+    expect(mix.SAME_NATION).toBeGreaterThan(0.65);
+    expect(mix.ELSEWHERE).toBeLessThan(0.08);
+  });
+
+  it('명성이 오르면 해외 비중이 커지고, 스타에게는 권역 제한이 없다', () => {
+    const known = { ...youth, player: { ...youth.player, age: 25, reputation: 55 } };
+    expect(offerRegionShares(known)!.SAME_NATION).toBeLessThan(offerRegionShares(youth)!.SAME_NATION);
+    expect(offerRegionShares(known)!.ELSEWHERE).toBeGreaterThan(offerRegionShares(youth)!.ELSEWHERE);
     const star = { ...youth, player: { ...youth.player, age: 27, reputation: 80 } };
-    expect(locality(star, BASE_WORLD, 'arsenal')).toBe(1);
-    expect(locality(star, BASE_WORLD, 'pohang')).toBe(1);
+    expect(offerRegionShares(star)).toBeNull();
   });
 });

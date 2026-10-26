@@ -107,7 +107,7 @@ const list: LeagueDefinition[] = [
   },
   {
     id: 'BEL_PRO', name: 'Belgian Pro League', nameKo: '벨기에 프로리그', nation: 'BEL', confederation: 'UEFA', tier: 1,
-    strength: 64, intensity: 1.0, roundRobinCycles: 2, promotionSlots: 0, relegationSlots: 0, teamCount: 16,
+    strength: 64, intensity: 1.0, roundRobinCycles: 2, promotionSlots: 0, relegationSlots: 0, teamCount: 18,
     domesticCupId: 'BEL_CUP', continentalSlots: slots([UCL, 1, 1], [UEL, 2, 2], [UECL, 3, 4]),
     aliases: ['BEL1', 'Jupiler Pro League', 'Pro League'],
   },
@@ -200,7 +200,7 @@ const list: LeagueDefinition[] = [
   },
   {
     id: 'KOR_K2', name: 'K League 2', nameKo: 'K리그2', nation: 'KOR', confederation: 'AFC', tier: 2,
-    strength: 57, intensity: 0.92, roundRobinCycles: 3, promotionSlots: 1, relegationSlots: 0, teamCount: 14,
+    strength: 57, intensity: 0.92, roundRobinCycles: 2, promotionSlots: 1, relegationSlots: 0, teamCount: 17,
     upperLeagueId: 'KOR_K1', domesticCupId: 'KOR_FA_CUP', continentalSlots: [],
     aliases: ['KOR2', 'K리그2'],
   },
@@ -224,7 +224,7 @@ const list: LeagueDefinition[] = [
   },
   {
     id: 'IRN_PGPL', name: 'Persian Gulf Pro League', nameKo: '페르시안 걸프 프로리그', nation: 'IRN', confederation: 'AFC', tier: 1,
-    strength: 57, intensity: 0.92, roundRobinCycles: 2, promotionSlots: 0, relegationSlots: 0, teamCount: 16,
+    strength: 57, intensity: 0.92, roundRobinCycles: 2, promotionSlots: 0, relegationSlots: 0, teamCount: 18,
     domesticCupId: 'IRN_HAZFI', continentalSlots: slots(['AFC_CL', 1, 2]),
     aliases: ['IRN1', 'Iran Pro League', 'Persian Gulf Pro League'],
   },
@@ -280,7 +280,7 @@ const list: LeagueDefinition[] = [
   },
   {
     id: 'ARG_LPF', name: 'Liga Profesional', nameKo: '아르헨티나 리가 프로페시오날', nation: 'ARG', confederation: 'CONMEBOL', tier: 1,
-    strength: 63, intensity: 0.98, roundRobinCycles: 1, promotionSlots: 0, relegationSlots: 0, teamCount: 28,
+    strength: 63, intensity: 0.98, roundRobinCycles: 1, promotionSlots: 0, relegationSlots: 0, teamCount: 30,
     domesticCupId: 'ARG_COPA', continentalSlots: slots(['CONMEBOL_LIB', 1, 5]),
     aliases: ['ARG1', 'Liga Profesional de Fútbol', 'Primera Division (Argentina)'],
   },
@@ -300,7 +300,7 @@ const list: LeagueDefinition[] = [
   // ===== 아프리카 =====
   {
     id: 'EGY_PL', name: 'Egyptian Premier League', nameKo: '이집트 프리미어리그', nation: 'EGY', confederation: 'CAF', tier: 1,
-    strength: 56, intensity: 0.92, roundRobinCycles: 2, promotionSlots: 0, relegationSlots: 0, teamCount: 18,
+    strength: 56, intensity: 0.92, roundRobinCycles: 2, promotionSlots: 0, relegationSlots: 0, teamCount: 20,
     domesticCupId: 'EGY_CUP', continentalSlots: slots(['CAF_CL', 1, 2]),
     aliases: ['EGY1', 'Egyptian Premier League'],
   },

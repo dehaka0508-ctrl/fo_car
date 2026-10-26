@@ -7,6 +7,7 @@ import { EYE_COLORS, HAIR_COLORS, SKIN_TONES } from '@/data/appearance';
 import { PLAYING_TIME_LABELS, SQUAD_LEVEL_LABELS } from '@/data/labels';
 import { PLAYSTYLE_DEFINITIONS, POSITION_META } from '@/data/playstyles';
 import { BASE_WORLD } from '@/engine/career';
+import { findClubId } from '@/engine/world';
 import { createPlayer } from '@/engine/character';
 import { useGameStore } from '@/store/gameStore';
 import {
@@ -23,6 +24,8 @@ import { Button, Card, Field, fieldClass, Stat } from './ui';
 
 const nations = Object.values(BASE_WORLD.nations).sort((a, b) => a.nameKo.localeCompare(b.nameKo, 'ko'));
 const leagues = Object.values(BASE_WORLD.leagues);
+/** 기본 소속팀: 울산 (DB가 바뀌어도 이름으로 찾고, 없으면 첫 구단) */
+const DEFAULT_CLUB = findClubId(BASE_WORLD.clubs, 'Ulsan', 'KOR') ?? Object.keys(BASE_WORLD.clubs)[0];
 const clubsByLeague = leagues.map((league) => ({
   league,
   clubs: Object.values(BASE_WORLD.clubs)
@@ -38,7 +41,7 @@ export function CreationScreen() {
   const [playStyle, setPlayStyle] = useState<PlayStyle>('POACHER');
   const [heightCm, setHeightCm] = useState(182);
   const [weightKg, setWeightKg] = useState(76);
-  const [clubId, setClubId] = useState('ulsan');
+  const [clubId, setClubId] = useState(DEFAULT_CLUB);
   const [hair, setHair] = useState<HairColor>('BLACK');
   const [skin, setSkin] = useState<SkinTone>(3);
   const [eyes, setEyes] = useState<EyeColor>('DARK_BROWN');

@@ -71,6 +71,7 @@ if (!quiet) {
       `  정규화: 빈 secondary → null ${f.emptySecondary}건 · legends 없음/null ${f.missingLegends}건 · ` +
         `히든 수치 기본값 ${f.defaultedStats}건 · 모르는 더비 상대 제외 ${f.droppedRivals}건 · 불완전한 레전드 제외 ${f.droppedLegends}건`,
     );
+    console.log(`  척도 환산 파일: ${db.report.scaledFiles.join(', ') || '없음'} · 더비 목록 연결 ${db.report.derbiesLinked}쌍`);
   }
 }
 for (const warning of [...broken, ...db.report.warnings]) console.log(`  ⚠ ${warning}`);

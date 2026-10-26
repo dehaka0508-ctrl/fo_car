@@ -6,12 +6,19 @@ import { createPlayer } from '@/engine/character';
 import { calculateOVR } from '@/engine/ovr';
 import { runDemoSeason } from '@/engine/season-demo';
 import { averageRating, competitiveLine, mergeStatLines } from '@/engine/simulator';
-import { createDefaultWorld } from '@/engine/world';
+import { createDefaultWorld, findClubId } from '@/engine/world';
 import type { Attributes, HighlightRecord, PlayerRole, PlayerState } from '@/types/game';
 
 const world = createDefaultWorld();
 const SEASON = 2026;
 const SEEDS = Number(process.env.SEEDS ?? 40);
+
+/** 구단은 이름으로 찾는다 (내장 샘플 · 외부 DB 어느 쪽이든) */
+function club(name: string, nation: string): string {
+  const id = findClubId(world.clubs, name, nation);
+  if (!id) throw new Error(`구단을 찾지 못했습니다: ${name}`);
+  return id;
+}
 
 interface Scenario {
   label: string;
@@ -24,13 +31,13 @@ interface Scenario {
 }
 
 const scenarios: Scenario[] = [
-  { label: '16세 포처 @ 울산 (생성 직후)', clubId: 'ulsan', role: { position: 'ST', playStyle: 'POACHER' }, boost: 0 },
-  { label: '성장한 포처(+26) @ 울산', clubId: 'ulsan', role: { position: 'ST', playStyle: 'POACHER' }, boost: 26 },
-  { label: '월드클래스 포처(+38) @ 맨시티', clubId: 'man-city', role: { position: 'ST', playStyle: 'POACHER' }, boost: 38, nationality: 'ENG' },
-  { label: '박투박(+30) @ 아스널, 지구력 95', clubId: 'arsenal', role: { position: 'CM', playStyle: 'BOX_TO_BOX' }, boost: 30, nationality: 'ENG', stamina: 95 },
-  { label: '박투박(+30) @ 아스널, 지구력 55', clubId: 'arsenal', role: { position: 'CM', playStyle: 'BOX_TO_BOX' }, boost: 30, nationality: 'ENG', stamina: 55 },
-  { label: '스토퍼(+30) @ 레알 마드리드', clubId: 'real-madrid', role: { position: 'CB', playStyle: 'STOPPER' }, boost: 30, nationality: 'ESP' },
-  { label: '스위퍼 키퍼(+30) @ 바르셀로나', clubId: 'barcelona', role: { position: 'GK', playStyle: 'SWEEPER_KEEPER' }, boost: 30, nationality: 'ESP' },
+  { label: '16세 포처 @ 울산 (생성 직후)', clubId: club('Ulsan', 'KOR'), role: { position: 'ST', playStyle: 'POACHER' }, boost: 0 },
+  { label: '성장한 포처(+26) @ 울산', clubId: club('Ulsan', 'KOR'), role: { position: 'ST', playStyle: 'POACHER' }, boost: 26 },
+  { label: '월드클래스 포처(+38) @ 맨시티', clubId: club('Manchester City', 'ENG'), role: { position: 'ST', playStyle: 'POACHER' }, boost: 38, nationality: 'ENG' },
+  { label: '박투박(+30) @ 아스널, 지구력 95', clubId: club('Arsenal', 'ENG'), role: { position: 'CM', playStyle: 'BOX_TO_BOX' }, boost: 30, nationality: 'ENG', stamina: 95 },
+  { label: '박투박(+30) @ 아스널, 지구력 55', clubId: club('Arsenal', 'ENG'), role: { position: 'CM', playStyle: 'BOX_TO_BOX' }, boost: 30, nationality: 'ENG', stamina: 55 },
+  { label: '스토퍼(+30) @ 레알 마드리드', clubId: club('Real Madrid', 'ESP'), role: { position: 'CB', playStyle: 'STOPPER' }, boost: 30, nationality: 'ESP' },
+  { label: '스위퍼 키퍼(+30) @ 바르셀로나', clubId: club('Barcelona', 'ESP'), role: { position: 'GK', playStyle: 'SWEEPER_KEEPER' }, boost: 30, nationality: 'ESP' },
 ];
 
 function buildPlayer(scenario: Scenario, seed: number): PlayerState {

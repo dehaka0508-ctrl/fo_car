@@ -10,6 +10,7 @@
 import { POSITION_META } from '@/data/playstyles';
 import { simulateCareer } from '@/engine/autoplay';
 import { BASE_WORLD } from '@/engine/career';
+import { findClubId } from '@/engine/world';
 import type { CharacterInput } from '@/engine/character';
 import { careerTotals } from '@/engine/records';
 import { averageRating, mergeStatLines } from '@/engine/simulator';
@@ -19,6 +20,13 @@ import type { GameState, PlayerRole, PositionGroup } from '@/types/game';
 const CAREERS = Number(process.env.CAREERS ?? 8);
 const ONLY = process.env.ONLY?.split(',').map((s) => s.trim()).filter(Boolean) ?? null;
 const DETAIL = process.env.DETAIL !== '0';
+
+/** 구단은 이름으로 찾는다 (내장 샘플 · 외부 DB 어느 쪽이든) */
+function club(name: string, nation: string): string {
+  const id = findClubId(BASE_WORLD.clubs, name, nation);
+  if (!id) throw new Error(`구단을 찾지 못했습니다: ${name}`);
+  return id;
+}
 
 interface Archetype {
   key: string;
@@ -31,23 +39,26 @@ interface Archetype {
 }
 
 const archetypes: Archetype[] = [
-  { key: 'poacher', label: '포처 · 울산', role: { position: 'ST', playStyle: 'POACHER' }, clubId: 'ulsan', nationality: 'KOR', heightCm: 182, weightKg: 76 },
-  { key: 'target', label: '타겟맨 · 에버턴', role: { position: 'ST', playStyle: 'TARGET_MAN' }, clubId: 'everton', nationality: 'ENG', heightCm: 192, weightKg: 88 },
-  { key: 'inside', label: '인사이드 포워드 · 맨시티', role: { position: 'LW', playStyle: 'INSIDE_FORWARD' }, clubId: 'man-city', nationality: 'ENG', heightCm: 176, weightKg: 70 },
-  { key: 'shadow', label: '쉐도우 스트라이커 · 레알 소시에다드', role: { position: 'AM', playStyle: 'SHADOW_STRIKER' }, clubId: 'real-sociedad', nationality: 'ESP', heightCm: 178, weightKg: 72 },
-  { key: 'playmaker', label: '플레이메이커 · 바르셀로나', role: { position: 'AM', playStyle: 'PLAYMAKER' }, clubId: 'barcelona', nationality: 'ESP', heightCm: 174, weightKg: 68 },
-  { key: 'b2b', label: '박스 투 박스 · 수원 삼성(2부)', role: { position: 'CM', playStyle: 'BOX_TO_BOX' }, clubId: 'suwon-samsung', nationality: 'KOR', heightCm: 180, weightKg: 74 },
-  { key: 'dlp', label: '딥 라잉 플레이메이커 · 레알 마드리드', role: { position: 'CM', playStyle: 'DEEP_LYING_PLAYMAKER' }, clubId: 'real-madrid', nationality: 'ESP', heightCm: 177, weightKg: 70 },
-  { key: 'stopper', label: '스토퍼 · 아틀레티코', role: { position: 'CB', playStyle: 'STOPPER' }, clubId: 'atletico-madrid', nationality: 'ESP', heightCm: 190, weightKg: 84 },
-  { key: 'keeper', label: '스위퍼 키퍼 · 전북', role: { position: 'GK', playStyle: 'SWEEPER_KEEPER' }, clubId: 'jeonbuk', nationality: 'KOR', heightCm: 191, weightKg: 85 },
-  { key: 'keeper-eu', label: '클래식 골키퍼 · 레알 마드리드', role: { position: 'GK', playStyle: 'CLASSIC_GOALKEEPER' }, clubId: 'real-madrid', nationality: 'ESP', heightCm: 192, weightKg: 86 },
+  { key: 'poacher', label: '포처 · 울산', role: { position: 'ST', playStyle: 'POACHER' }, clubId: club('Ulsan', 'KOR'), nationality: 'KOR', heightCm: 182, weightKg: 76 },
+  { key: 'target', label: '타겟맨 · 에버턴', role: { position: 'ST', playStyle: 'TARGET_MAN' }, clubId: club('Everton', 'ENG'), nationality: 'ENG', heightCm: 192, weightKg: 88 },
+  { key: 'inside', label: '인사이드 포워드 · 맨시티', role: { position: 'LW', playStyle: 'INSIDE_FORWARD' }, clubId: club('Manchester City', 'ENG'), nationality: 'ENG', heightCm: 176, weightKg: 70 },
+  { key: 'shadow', label: '쉐도우 스트라이커 · 레알 소시에다드', role: { position: 'AM', playStyle: 'SHADOW_STRIKER' }, clubId: club('Real Sociedad', 'ESP'), nationality: 'ESP', heightCm: 178, weightKg: 72 },
+  { key: 'playmaker', label: '플레이메이커 · 바르셀로나', role: { position: 'AM', playStyle: 'PLAYMAKER' }, clubId: club('Barcelona', 'ESP'), nationality: 'ESP', heightCm: 174, weightKg: 68 },
+  { key: 'b2b', label: '박스 투 박스 · 수원 삼성(2부)', role: { position: 'CM', playStyle: 'BOX_TO_BOX' }, clubId: club('Suwon Samsung', 'KOR'), nationality: 'KOR', heightCm: 180, weightKg: 74 },
+  { key: 'dlp', label: '딥 라잉 플레이메이커 · 레알 마드리드', role: { position: 'CM', playStyle: 'DEEP_LYING_PLAYMAKER' }, clubId: club('Real Madrid', 'ESP'), nationality: 'ESP', heightCm: 177, weightKg: 70 },
+  { key: 'stopper', label: '스토퍼 · 아틀레티코', role: { position: 'CB', playStyle: 'STOPPER' }, clubId: club('Atletico Madrid', 'ESP'), nationality: 'ESP', heightCm: 190, weightKg: 84 },
+  { key: 'keeper', label: '스위퍼 키퍼 · 전북', role: { position: 'GK', playStyle: 'SWEEPER_KEEPER' }, clubId: club('Jeonbuk', 'KOR'), nationality: 'KOR', heightCm: 191, weightKg: 85 },
+  { key: 'keeper-eu', label: '클래식 골키퍼 · 레알 마드리드', role: { position: 'GK', playStyle: 'CLASSIC_GOALKEEPER' }, clubId: club('Real Madrid', 'ESP'), nationality: 'ESP', heightCm: 192, weightKg: 86 },
 ];
 
 function summarize(state: GameState) {
   const totals = careerTotals(state);
   const peak = state.history.reduce((best, s) => (s.ovrEnd > best.ovr ? { ovr: s.ovrEnd, age: s.age + 1 } : best), { ovr: 0, age: 0 });
   const ballon = state.awards.filter((a) => a.type === 'BALLON_DOR');
-  const clubs = [...new Set(state.player.clubHistory.map((s) => BASE_WORLD.clubs[s.clubId]?.shortName ?? s.clubId))];
+  const clubs = state.player.clubHistory
+    .map((s) => BASE_WORLD.clubs[s.clubId])
+    .filter((c, i, arr) => c && arr.findIndex((x) => x?.id === c.id) === i)
+    .map((c) => `${c!.nameKo}(${c!.nation})`);
   const seasons = state.history.map((s) => ({
     league: s.stats.LEAGUE.goals,
     club: mergeStatLines(s.stats.LEAGUE, s.stats.DOMESTIC_CUP, s.stats.CONTINENTAL).goals,
@@ -145,7 +156,7 @@ for (const [group, s] of Object.entries(ballonByGroup)) {
 
 if (DETAIL && (!ONLY || ONLY.includes('poacher'))) {
   const detail = simulateCareer(
-    { name: '김유망', nationality: 'KOR', role: { position: 'ST', playStyle: 'POACHER' }, heightCm: 182, weightKg: 76, appearance: { hair: 'BLACK', skin: 3, eyes: 'DARK_BROWN' }, clubId: 'ulsan' },
+    { name: '김유망', nationality: 'KOR', role: { position: 'ST', playStyle: 'POACHER' }, heightCm: 182, weightKg: 76, appearance: { hair: 'BLACK', skin: 3, eyes: 'DARK_BROWN' }, clubId: club('Ulsan', 'KOR') },
     3,
   );
   console.log('\n■ 시즌별 기록 (포처 · 울산 · 시드 3)');

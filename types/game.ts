@@ -400,6 +400,17 @@ export interface ClubDefinition {
   promotionEligible?: boolean;
   /** 동 포지션 역사적 레전드 (없으면 data/legends.ts 참조) */
   legends?: ClubLegend[];
+  /** 직전 시즌 실적 (외부 DB). 첫 시즌의 리그 순서·대륙 대회 진출에 쓴다 */
+  lastSeason?: ClubLastSeason;
+}
+
+export interface ClubLastSeason {
+  /** 직전 시즌 리그 순위 (승격·강등 팀은 직전 소속 리그 기준) */
+  leagueRank: number | null;
+  /** 직전 시즌에 다른 리그였으면: UP 승격 · DOWN 강등 */
+  movement: 'UP' | 'DOWN' | null;
+  /** 이번 시즌 대륙 대회 (null = 진출 없음 · 없으면 정보 없음 → 슬롯 규칙) */
+  continental?: ID | null;
 }
 
 // ============================================================================

@@ -16,7 +16,7 @@ import { createPlayer, determineInitialSquadStatus } from '@/engine/character';
 import { calculateOVR, rankPlayStyleFit } from '@/engine/ovr';
 import { runDemoSeason } from '@/engine/season-demo';
 import { averageRating } from '@/engine/simulator';
-import { createDefaultWorld } from '@/engine/world';
+import { createDefaultWorld, findClubId } from '@/engine/world';
 import {
   ATTRIBUTE_KEYS,
   COMPETITION_TYPES,
@@ -35,6 +35,7 @@ import {
 } from '@/types/game';
 
 const world = createDefaultWorld();
+const DEFAULT_CLUB = findClubId(world.clubs, 'Ulsan', 'KOR') ?? Object.keys(world.clubs)[0];
 const SEASON = 2026;
 
 const nations = Object.values(world.nations).sort((a, b) => a.nameKo.localeCompare(b.nameKo, 'ko'));
@@ -70,7 +71,7 @@ export function SimulationSandbox() {
   const [playStyle, setPlayStyle] = useState<PlayStyle>('POACHER');
   const [heightCm, setHeightCm] = useState(182);
   const [weightKg, setWeightKg] = useState(76);
-  const [clubId, setClubId] = useState('ulsan');
+  const [clubId, setClubId] = useState(DEFAULT_CLUB);
   const [hair, setHair] = useState<HairColor>('BLACK');
   const [skin, setSkin] = useState<SkinTone>(3);
   const [eyes, setEyes] = useState<EyeColor>('DARK_BROWN');
