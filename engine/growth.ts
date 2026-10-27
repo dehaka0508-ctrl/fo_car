@@ -1,11 +1,16 @@
 /**
  * 능력치 성장 · 노화
  *
- * 성장 경로는 세 가지다.
+ * 성장 경로는 네 가지다.
  *  1) 훈련 (턴 사이 1회): 큰 카테고리 1개 소폭 상승 / 세부 능력치 2~3개 상승 / 벌크업·감량 / 휴식
  *  2) 경험 (매 턴): 출전 시간에 비례해 포지션 핵심 능력치가 오른다 (어릴수록 크게)
- *  3) 자연 성장·노화 (시즌 종료): 24세까지 자연 성장, 30세 전후부터 스피드 → 체력 → 기술 순으로 하락
- * 모든 상승량은 '현재 수치가 높을수록 덜 오르는' levelFactor를 거친다.
+ *  3) 자연 성장 (매 턴): 모든 능력치가 소폭 오르고 포지션 핵심 능력치가 더 오른다.
+ *     피지컬은 어릴 때 빠르게(25세 무렵 멈춤), 기술은 30세 무렵까지, 판단력(멘탈)은 33세 무렵까지 오른다.
+ *  4) 노화 (시즌 종료): 30세 전후부터 스피드 → 체력 → 기술 순으로 하락
+ * 숨은 포텐셜(PlayerState.potential, 80~100)이 최대 OVR이다.
+ *  - levelFactor: 현재 수치가 '포텐셜에 비해' 높을수록 덜 오른다 (재능이 클수록 높은 수치에서도 잘 오른다)
+ *  - potentialFactor: OVR이 포텐셜에 가까워지면 모든 상승이 줄고, 포텐셜에 닿으면 멈춘다
+ * 보통 26~29세에 포텐셜에 닿도록 맞췄다 (npm run sim:growth).
  * 소수점 상승량은 기대값을 지키는 확률적 반올림으로 정수화한다.
  */
 import { CATEGORY_ATTRIBUTES, GOALKEEPING_ATTRIBUTES } from '@/data/attributes';
@@ -60,6 +65,27 @@ export const GROWTH_CONFIG = {
     /** 경험·자연 성장 1포인트가 OVR로 이어지는 비율 (모든 스타일 동일) */
     growthOvrRate: 0.72,
   },
+  potential: {
+    /** 예전 세이브처럼 포텐셜이 없을 때 */
+    default: 90,
+    /** OVR이 포텐셜 n 이내로 다가오면 상승이 줄기 시작한다 */
+    softZone: 3,
+    /** 재능 배율 지수: 포텐셜 80 → 0.79배, 99 → 1.21배 (2일 때) */
+    talentExponent: 2,
+  },
+  /** 매 턴 자연 성장 */
+  turnGrowth: {
+    /** 나이 곡선 1 · 목표까지 gapUnit 이상 남았을 때 핵심 능력치(가중치 1)의 한 턴 상승량 */
+    base: 0.62,
+    /** 포지션과 무관한 능력치도 이만큼은 오른다 (핵심 능력치는 1 + 이 값) */
+    minShare: 0.25,
+    /** 목표까지 남은 거리가 클수록 빨리 오른다: 배율 = 남은 거리 / gapUnit (최대 gapMax) */
+    gapUnit: 10,
+    gapMax: 2.5,
+    /** 능력치별 목표: OVR에 쓰이는 능력치는 포텐셜 + roleTargetBonus, 나머지는 포텐셜 × offRoleTarget */
+    roleTargetBonus: 3,
+    offRoleTarget: 0.6,
+  },
 } as const;
 
 // ----------------------------------------------------------------------------
@@ -81,9 +107,27 @@ export function trainingAgeFactor(age: number): number {
   return AGE_CURVE[AGE_CURVE.length - 1][1];
 }
 
-/** 현재 수치가 높을수록 덜 오른다 (57 → 1.0, 77 → 0.5, 89 → 0.2) */
-export function levelFactor(value: number): number {
-  return clamp((97 - value) / 40, 0.1, 1.2);
+export function potentialOf(player: Pick<PlayerState, 'potential'>): number {
+  return player.potential ?? GROWTH_CONFIG.potential.default;
+}
+
+/**
+ * 현재 수치가 포텐셜에 비해 높을수록 덜 오른다.
+ * 포텐셜 90 기준 57 → 1.0, 77 → 0.5, 89 → 0.2 (포텐셜이 10 높으면 같은 상승률을 10 높은 수치에서 낸다)
+ */
+export function levelFactor(value: number, potential: number = GROWTH_CONFIG.potential.default): number {
+  return clamp((potential + 7 - value) / 40, 0.1, 1.2);
+}
+
+/**
+ * OVR이 포텐셜에 가까울수록 상승이 줄고, 포텐셜에 닿으면 0.
+ * 포텐셜이 높을수록(재능) 같은 노력으로 더 많이 오른다: (포텐셜/90)^talentExponent
+ */
+export function potentialFactor(player: Pick<PlayerState, 'potential' | 'ovr'>): number {
+  const potential = potentialOf(player);
+  const room = potential - player.ovr;
+  const talent = (potential / GROWTH_CONFIG.potential.default) ** GROWTH_CONFIG.potential.talentExponent;
+  return Math.sqrt(clamp(room / GROWTH_CONFIG.potential.softZone, 0, 1)) * talent;
 }
 
 export function stochasticRound(rng: Rng, value: number): number {
@@ -166,9 +210,10 @@ export function expectedTrainingGain(player: PlayerState, key: AttributeKey): nu
   return (
     GROWTH_CONFIG.training.focusedBase[2] *
     trainingAgeFactor(player.age) *
-    levelFactor(player.attributes[key]) *
+    levelFactor(player.attributes[key], potentialOf(player)) *
     focusMultiplier(player, key) *
-    styleTrainingEfficiency(player.profile.role.playStyle)
+    styleTrainingEfficiency(player.profile.role.playStyle) *
+    potentialFactor(player)
   );
 }
 
@@ -195,11 +240,13 @@ export function previewTraining(player: PlayerState, plan: TrainingPlan): Traini
   }
   const intensity = t.intensity[plan.intensity];
   const age = trainingAgeFactor(player.age) * styleTrainingEfficiency(player.profile.role.playStyle);
+  const potential = potentialOf(player);
+  const cap = potentialFactor(player);
   const gains: Partial<Record<AttributeKey, number>> = {};
   let weightDelta = 0;
 
   const grow = (key: AttributeKey, base: number) => {
-    gains[key] = round1(base * intensity.gain * age * levelFactor(player.attributes[key]) * focusMultiplier(player, key));
+    gains[key] = round1(base * intensity.gain * age * levelFactor(player.attributes[key], potential) * focusMultiplier(player, key) * cap);
   };
 
   if (plan.kind === 'CATEGORY') {
@@ -223,8 +270,8 @@ export function previewTraining(player: PlayerState, plan: TrainingPlan): Traini
       plan.kind === 'BULK_UP'
         ? ['strength', 'aerial', 'acceleration', 'agility']
         : ['acceleration', 'agility', 'strength', 'aerial'];
-    gains[upMain] = round1(g * levelFactor(player.attributes[upMain]));
-    gains[upSub] = round1(0.7 * g * levelFactor(player.attributes[upSub]));
+    gains[upMain] = round1(g * levelFactor(player.attributes[upMain], potential) * cap);
+    gains[upSub] = round1(0.7 * g * levelFactor(player.attributes[upSub], potential) * cap);
     gains[downA] = round1(-0.6 * g);
     gains[downB] = round1(-0.6 * g);
     const bmi = (player.weightKg + weightDelta) / (player.profile.heightCm / 100) ** 2;
@@ -286,26 +333,84 @@ export function applyMatchExperience(
     stats.INTERNATIONAL.minutes +
     stats.RESERVE.minutes * e.reserveWeight +
     stats.FRIENDLY.minutes * e.friendlyWeight;
-  const points = (minutes / 90) * experienceRate(player.age);
+  const points = (minutes / 90) * experienceRate(player.age) * potentialFactor(player);
   if (points <= 0) return { player, deltas: {} };
 
   const expected: Partial<Record<AttributeKey, number>> = {};
+  const potential = potentialOf(player);
   for (const [key, weight] of Object.entries(growthShares(player)) as Array<[AttributeKey, number]>) {
-    expected[key] = points * weight * levelFactor(player.attributes[key]);
+    expected[key] = points * weight * levelFactor(player.attributes[key], potential);
   }
   const deltas = roundDeltas(rng, expected);
   return { player: applyDeltas(player, deltas), deltas };
 }
 
 // ----------------------------------------------------------------------------
-// 자연 성장 · 노화 (시즌 종료)
+// 자연 성장 (매 턴)
 // ----------------------------------------------------------------------------
 
-/** 방금 끝난 시즌의 나이 기준 자연 성장량 (핵심 능력치 기준) */
-export function naturalGrowth(age: number): number {
-  const table: Record<number, number> = { 16: 3.2, 17: 3.2, 18: 2.8, 19: 2.4, 20: 2, 21: 1.6, 22: 1.2, 23: 0.8, 24: 0.4 };
-  return table[age] ?? 0;
+export type GrowthGroup = 'PHYSICAL' | 'TECHNICAL' | 'MENTAL';
+
+/** 피지컬(신체) · 기술 · 멘탈(판단 · 위치 선정) */
+export const GROWTH_GROUP: Record<AttributeKey, GrowthGroup> = {
+  sprintSpeed: 'PHYSICAL', acceleration: 'PHYSICAL', agility: 'PHYSICAL', stamina: 'PHYSICAL', strength: 'PHYSICAL', aerial: 'PHYSICAL',
+  reflexes: 'PHYSICAL', gkRange: 'PHYSICAL',
+  finishing: 'TECHNICAL', shotPower: 'TECHNICAL', kickAccuracy: 'TECHNICAL', setPieces: 'TECHNICAL', technique: 'TECHNICAL', takeOn: 'TECHNICAL',
+  tackling: 'TECHNICAL', distribution: 'TECHNICAL', goalKick: 'TECHNICAL',
+  offTheBall: 'MENTAL', vision: 'MENTAL', pressResistance: 'MENTAL', interceptions: 'MENTAL', defPositioning: 'MENTAL',
+  gkPositioning: 'MENTAL', organization: 'MENTAL',
+};
+
+/** 나이별 한 턴 자연 성장 배율 (사이 나이는 보간) */
+export const TURN_GROWTH_CURVE: Record<GrowthGroup, ReadonlyArray<[number, number]>> = {
+  PHYSICAL: [[16, 1.0], [19, 1.0], [21, 0.7], [23, 0.35], [25, 0.1], [27, 0]],
+  TECHNICAL: [[16, 0.7], [20, 0.8], [24, 0.8], [27, 0.65], [29, 0.45], [31, 0.15], [33, 0]],
+  MENTAL: [[16, 0.5], [20, 0.65], [24, 0.8], [27, 0.8], [29, 0.6], [31, 0.35], [34, 0.1], [36, 0]],
+};
+
+export function turnGrowthRate(group: GrowthGroup, age: number): number {
+  const curve = TURN_GROWTH_CURVE[group];
+  if (age <= curve[0][0]) return curve[0][1];
+  for (let i = 1; i < curve.length; i++) {
+    const [a1, r1] = curve[i];
+    const [a0, r0] = curve[i - 1];
+    if (age <= a1) return r0 + ((r1 - r0) * (age - a0)) / (a1 - a0);
+  }
+  return curve[curve.length - 1][1];
 }
+
+/**
+ * 매 턴 자연 성장: 모든 능력치가 소폭 오르고 포지션 핵심 능력치가 더 오른다.
+ * 필드 선수는 GK 스탯이 오르지 않고, GK는 GK 스탯과 신체 능력만 오른다.
+ */
+export function applyTurnGrowth(player: PlayerState, rng: Rng): { player: PlayerState; deltas: Partial<Record<AttributeKey, number>> } {
+  const cap = potentialFactor(player);
+  if (cap <= 0) return { player, deltas: {} };
+  const g = GROWTH_CONFIG.turnGrowth;
+  const isGK = player.profile.role.position === 'GK';
+  const weights = roleWeights(player);
+  const potential = potentialOf(player);
+  const expected: Partial<Record<AttributeKey, number>> = {};
+  for (const key of ATTRIBUTE_KEYS) {
+    const isGkStat = (GK_STAT_KEYS as readonly string[]).includes(key);
+    if (isGK ? !isGkStat && GROWTH_GROUP[key] !== 'PHYSICAL' : isGkStat) continue;
+    const rate = turnGrowthRate(GROWTH_GROUP[key], player.age);
+    if (rate <= 0) continue;
+    const weight = weights[key] ?? 0;
+    // 각 능력치는 자기 목표를 향해 자란다: 포지션에 쓰이는 능력치는 포텐셜 근처까지, 나머지는 적당히
+    const target = weight > 0 ? Math.min(99, potential + g.roleTargetBonus) : potential * g.offRoleTarget;
+    const remaining = target - player.attributes[key];
+    if (remaining <= 0) continue;
+    const pull = clamp(remaining / g.gapUnit, 0, g.gapMax);
+    expected[key] = g.base * rate * (g.minShare + weight) * pull * cap;
+  }
+  const deltas = roundDeltas(rng, expected);
+  return { player: applyDeltas(player, deltas), deltas };
+}
+
+// ----------------------------------------------------------------------------
+// 노화 (시즌 종료)
+// ----------------------------------------------------------------------------
 
 type DeclineGroup = 'SPEED' | 'ENDURANCE' | 'POWER' | 'TECHNICAL' | 'MIND';
 
@@ -344,13 +449,11 @@ export interface AgingResult {
   shielded: Partial<Record<AttributeKey, number>>;
 }
 
-/** 나이를 1살 올리고 자연 성장·노화를 적용한다. 노화 방어(agingShields)는 소모된다. */
+/** 나이를 1살 올리고 노화를 적용한다 (자연 성장은 매 턴 applyTurnGrowth). 노화 방어(agingShields)는 소모된다. */
 export function applySeasonalAging(player: PlayerState, rng: Rng): AgingResult {
   const isGK = player.profile.role.position === 'GK';
-  const growth = naturalGrowth(player.age);
   const newAge = player.age + 1;
   const decline = declineProfile(newAge, isGK);
-  const weights = growthShares(player);
   const expected: Partial<Record<AttributeKey, number>> = {};
   const shielded: Partial<Record<AttributeKey, number>> = {};
 
@@ -358,10 +461,6 @@ export function applySeasonalAging(player: PlayerState, rng: Rng): AgingResult {
     const isGkStat = (GK_STAT_KEYS as readonly string[]).includes(key);
     if (isGkStat && !isGK) continue;
     let delta = 0;
-    if (growth > 0) {
-      const share = weights[key] ?? (isGkStat ? 0 : 0.2);
-      delta += growth * share * levelFactor(player.attributes[key]);
-    }
     const loss = decline[DECLINE_GROUP[key]] * (0.8 + 0.4 * rng.next());
     if (loss > 0) {
       const shield = player.agingShields[key] ?? 0;

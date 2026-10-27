@@ -9,7 +9,7 @@ import type { AttributeKey, EventChoice, EventEffect, GameState, TrainingPlan } 
 import { canRetire, createCareer, playTurnAuto, retire, worldOf } from './career';
 import type { CharacterInput } from './character';
 import { isChoiceAffordable, resolveEvent } from './events';
-import { levelFactor, roleWeights } from './growth';
+import { levelFactor, potentialOf, roleWeights } from './growth';
 import { buyInterTurn, shopOffers, trainInterTurn } from './interTurn';
 import { canPurchase, previewItemEffect } from './shop';
 import { isRegularRole } from './squad';
@@ -63,7 +63,7 @@ export function autoTrainingPlan(state: GameState): TrainingPlan {
   if (player.condition < 45) return { kind: 'REST' };
   const weights = roleWeights(player);
   const ranked = (Object.entries(weights) as Array<[AttributeKey, number]>)
-    .map(([key, w]) => ({ key, value: w * levelFactor(player.attributes[key]) }))
+    .map(([key, w]) => ({ key, value: w * levelFactor(player.attributes[key], potentialOf(player)) }))
     .sort((a, b) => b.value - a.value);
   const intensity = player.condition >= 80 ? 'INTENSE' : player.condition >= 60 ? 'NORMAL' : 'LIGHT';
   return { kind: 'FOCUSED', attributes: ranked.slice(0, 2).map((r) => r.key), intensity };

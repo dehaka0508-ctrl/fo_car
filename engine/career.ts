@@ -15,7 +15,7 @@ import { DATABASE } from '@/data/database';
 import type { GameState, HighlightOutcome, TurnPhase, TurnPointer, TurnResult } from '@/types/game';
 import { createPlayer, type CharacterInput } from './character';
 import { syncSaveWithDatabase } from './dbSync';
-import { applyMatchExperience } from './growth';
+import { applyMatchExperience, applyTurnGrowth } from './growth';
 import { buildAutoHighlightOutcome } from './highlight';
 import { beginInterTurn, interTurnBlockers } from './interTurn';
 import { simulateFirstHalfTable } from './league';
@@ -205,9 +205,10 @@ function applyTurnResult(state: GameState, world: SimulationWorld, result: TurnR
     streaks: { ...state.streaks, freeAgentTurns: clubId ? 0 : state.streaks.freeAgentTurns + 1 },
   };
 
-  // 출전 경험 성장
+  // 출전 경험 성장 + 매 턴 자연 성장 (포텐셜까지)
   const experience = applyMatchExperience(next.player, result.playerStats, rng);
-  next = { ...next, player: experience.player };
+  const natural = applyTurnGrowth(experience.player, rng);
+  next = { ...next, player: natural.player };
 
   next = applyTurnToCareer(next, result);
   next = applyTurnNarrative(next, result);

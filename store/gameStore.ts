@@ -17,7 +17,7 @@ import {
   syncWithDatabase,
   worldOf,
 } from '@/engine/career';
-import type { CharacterInput } from '@/engine/character';
+import { rollPotential, type CharacterInput } from '@/engine/character';
 import { resolveEvent } from '@/engine/events';
 import { buildAutoHighlightOutcome, buildHighlightScene, resolveSituationChoice } from '@/engine/highlight';
 import { buyInterTurn, trainInterTurn } from '@/engine/interTurn';
@@ -253,7 +253,10 @@ export const useGameStore = create<GameStore>()(
       // 세이브를 불러올 때 구단 DB(data/external/)가 바뀌었으면 맞춘다 (턴 진행 중이면 턴이 끝난 뒤)
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<GameStore>;
-        const game = saved.game && !saved.session && saved.game.stage === 'READY' ? syncWithDatabase(saved.game) : (saved.game ?? null);
+        let loaded = saved.game ?? null;
+        // 포텐셜 도입 전 세이브: 시드로 숨은 포텐셜을 정한다
+        if (loaded && loaded.player.potential === undefined) loaded = { ...loaded, player: { ...loaded.player, potential: rollPotential(loaded.seed) } };
+        const game = loaded && !saved.session && loaded.stage === 'READY' ? syncWithDatabase(loaded) : loaded;
         // 단계 정보가 없는 예전 세이브는 할 일이 남은 첫 단계부터
         const step = saved.step ?? (game ? nextStep(game, 'MATCH') : 'MATCH');
         return { ...current, ...saved, game, step };

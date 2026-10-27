@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "sim": "tsx scripts/sim-season.ts",
     "sim:career": "tsx scripts/sim-career.ts",
+    "sim:growth": "tsx scripts/sim-growth.ts",
     "sim:ballon": "tsx scripts/sim-ballon.ts",
     "db:sync": "tsx scripts/sync-external-db.ts",
     "presim": "tsx scripts/sync-external-db.ts --quiet",

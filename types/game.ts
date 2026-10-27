@@ -957,6 +957,8 @@ export interface PlayerState {
   attributes: Attributes;
   /** 현재 포지션·스타일 기준 OVR (캐시) */
   ovr: number;
+  /** 숨은 포텐셜 = 도달할 수 있는 최대 OVR (80~100, 커리어 시작 때 무작위). 화면에는 보이지 않는다 */
+  potential: number;
   reputation: number;
   /** 체력(컨디션) 0~100: 매 턴 실제 출전 경기 수를 결정 */
   condition: number;

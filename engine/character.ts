@@ -168,6 +168,11 @@ export interface CharacterInput {
   clubId: ID;
 }
 
+/** 숨은 포텐셜(최대 OVR): 80~100 균등. 다른 초기값의 난수 흐름과 섞이지 않도록 별도 스트림 */
+export function rollPotential(seed: number): number {
+  return 80 + rngFor(seed, 'potential').int(0, 20);
+}
+
 export function createPlayer(
   input: CharacterInput,
   world: SimulationWorld,
@@ -200,6 +205,7 @@ export function createPlayer(
     weightKg,
     attributes,
     ovr,
+    potential: rollPotential(options.seed),
     reputation: squad.level === 'FIRST_TEAM' ? 10 : 5,
     condition: 100,
     mental: 60,
