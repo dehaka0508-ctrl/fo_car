@@ -5,13 +5,12 @@
  * 풀 커리어 통합 테스트, UI의 '자동 진행' 버튼, 밸런스 점검 스크립트에서 쓴다.
  */
 import { GAME_EVENT_MAP } from '@/data/events';
-import { SHOP_ITEMS } from '@/data/items';
 import type { AttributeKey, EventChoice, EventEffect, GameState, TrainingPlan } from '@/types/game';
 import { canRetire, createCareer, playTurnAuto, retire, worldOf } from './career';
 import type { CharacterInput } from './character';
 import { isChoiceAffordable, resolveEvent } from './events';
 import { levelFactor, roleWeights } from './growth';
-import { buyInterTurn, trainInterTurn } from './interTurn';
+import { buyInterTurn, shopOffers, trainInterTurn } from './interTurn';
 import { canPurchase, previewItemEffect } from './shop';
 import { isRegularRole } from './squad';
 import { acceptOffer, offerAttractiveness, rejectOffer, requestMove, requestRenewal, seasonsLeft } from './transfer';
@@ -73,7 +72,8 @@ export function autoTrainingPlan(state: GameState): TrainingPlan {
 function autoShop(state: GameState): GameState {
   const { player } = state;
   const weights = roleWeights(player);
-  const candidates = SHOP_ITEMS.filter((item) => canPurchase(player, item, state.interTurn.purchasedItemId !== null).ok && player.money >= item.price * 1.5)
+  const candidates = shopOffers(state)
+    .filter((item) => canPurchase(player, item, state.interTurn.purchasedItemId !== null).ok && player.money >= item.price * 1.5)
     .map((item) => {
       const preview = previewItemEffect(player, item);
       const amount = preview.mode === 'BOOST' ? preview.expected : preview.amount * 0.6;

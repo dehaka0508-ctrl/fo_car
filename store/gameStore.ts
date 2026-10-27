@@ -28,7 +28,21 @@ import {
   requestMove,
   requestRenewal,
 } from '@/engine/transfer';
-import type { GameState, PlayingTime, ResolvedSituation, TrainingPlan } from '@/types/game';
+import { ATTRIBUTE_META } from '@/data/attributes';
+import { GAME_EVENT_MAP } from '@/data/events';
+import { SHOP_ITEM_MAP } from '@/data/items';
+import { renderEventText } from '@/engine/events';
+import { clubName } from '@/engine/world';
+import type { AttributeKey, GameState, PlayingTime, ResolvedSituation, TrainingPlan } from '@/types/game';
+import { type FlowStep, nextStep, pendingOffers, unresolvedEvents } from './flow';
+
+/** 방금 한 선택의 결과 (다음 단계 화면 위에 잠깐 보여 준다) */
+export interface FlowFlash {
+  title: string;
+  lines: string[];
+}
+
+const signedText = (v: number, digits = 0) => `${v > 0 ? '+' : ''}${digits ? v.toFixed(digits) : Math.round(v)}`;
 
 export const SAVE_KEY = 'fo-car-save';
 export const SAVE_VERSION = 2;
@@ -43,6 +57,10 @@ interface GameStore {
   ackedPopups: string[];
   /** 마지막 오류·안내 메시지 */
   message: string | null;
+  /** 턴 진행 단계 (경기 → 사건 → 훈련 → 상점 → 이적) */
+  step: FlowStep;
+  /** 방금 한 선택의 결과 */
+  flash: FlowFlash | null;
 
   newCareer: (input: CharacterInput, seed?: number) => void;
   playTurn: () => void;
@@ -63,6 +81,10 @@ interface GameStore {
   autoPlay: (turns: number) => void;
   clearMessage: () => void;
   reset: () => void;
+  /** 단계 표시를 눌러 이동 */
+  goStep: (step: FlowStep) => void;
+  /** 이 단계를 건너뛰고 다음 단계로 */
+  skipStep: () => void;
 }
 
 function errorText(error: unknown): string {
@@ -85,7 +107,8 @@ export const useGameStore = create<GameStore>()(
         const game = get().game;
         if (!game) return;
         // 턴이 끝난 뒤에는 구단 DB 변경도 반영한다 (진행 중인 턴에는 손대지 않는다)
-        set({ game: syncWithDatabase(completeTurn(game, session)), session: null, highlightPicks: [] });
+        const next = syncWithDatabase(completeTurn(game, session));
+        set({ game: next, session: null, highlightPicks: [], step: nextStep(next, 'MATCH'), flash: null });
       };
 
       return {
@@ -94,11 +117,14 @@ export const useGameStore = create<GameStore>()(
         highlightPicks: [],
         ackedPopups: [],
         message: null,
+        step: 'MATCH',
+        flash: null,
 
         newCareer: (input, seed) =>
           run(() => {
             const game = createCareer(input, { seed: seed ?? Math.floor(Math.random() * 1_000_000_000) });
-            return { game, session: null, highlightPicks: [], ackedPopups: game.notices.map((n) => n.id), message: null };
+            // 첫 경기 전에도 훈련·상점부터 (답할 사건은 아직 없다)
+            return { game, session: null, highlightPicks: [], ackedPopups: game.notices.map((n) => n.id), message: null, step: nextStep(game, 'MATCH'), flash: null };
           }),
 
         playTurn: () =>
@@ -138,16 +164,48 @@ export const useGameStore = create<GameStore>()(
             finish(continueTurn(session, buildAutoHighlightOutcome(session)));
           }),
 
-        train: (plan) => run(() => ({ game: trainInterTurn(get().game!, plan) })),
-        buy: (itemId) => run(() => ({ game: buyInterTurn(get().game!, itemId) })),
-        answerEvent: (instanceId, choiceId) => run(() => ({ game: resolveEvent(get().game!, instanceId, choiceId) })),
+        train: (plan) =>
+          run(() => {
+            const game = trainInterTurn(get().game!, plan);
+            const result = game.interTurn.training!;
+            const lines = [
+              ...Object.entries(result.deltas).map(([key, delta]) => `${ATTRIBUTE_META[key as AttributeKey].label} ${signedText(delta ?? 0)}`),
+              `체력 ${signedText(result.conditionDelta)}`,
+              ...(result.weightDelta ? [`몸무게 ${signedText(result.weightDelta, 1)}kg`] : []),
+            ];
+            return { game, step: nextStep(game, 'TRAINING'), flash: { title: plan.kind === 'REST' ? '휴식 완료' : '훈련 완료', lines } };
+          }),
+        buy: (itemId) =>
+          run(() => {
+            const game = buyInterTurn(get().game!, itemId);
+            const owned = game.player.inventory.find((o) => o.itemId === itemId);
+            const item = SHOP_ITEM_MAP[itemId];
+            const effect = owned?.effect.mode === 'BOOST' ? `${ATTRIBUTE_META[item.attribute].label} +${owned.effect.amount}` : `노화 방어 ${owned?.effect.amount ?? 0}`;
+            return { game, step: nextStep(game, 'SHOP'), flash: { title: `${item.name} 구매`, lines: [effect] } };
+          }),
+        answerEvent: (instanceId, choiceId) =>
+          run(() => {
+            const game = resolveEvent(get().game!, instanceId, choiceId);
+            const event = game.events.find((e) => e.instanceId === instanceId)!;
+            const def = GAME_EVENT_MAP[event.definitionId];
+            const choice = def.choices.find((c) => c.id === choiceId);
+            const flash = { title: `${renderEventText(def.title, event.vars)} · ${choice?.label ?? ''}`, lines: event.resolution?.summary ?? [] };
+            return { game, flash, step: unresolvedEvents(game).length ? 'EVENTS' : nextStep(game, 'EVENTS') };
+          }),
 
         acceptOffer: (offerId) =>
           run(() => {
-            const game = get().game!;
-            return { game: acceptTransferOffer(game, worldOf(game), offerId) };
+            const before = get().game!;
+            const offer = before.offers.find((o) => o.id === offerId);
+            const game = acceptTransferOffer(before, worldOf(before), offerId);
+            const flash = offer ? { title: `${clubName(worldOf(game), offer.clubId)} 제안 수락`, lines: [] } : null;
+            return { game, flash, step: pendingOffers(game).length ? 'TRANSFER' : nextStep(game, 'TRANSFER') };
           }),
-        rejectOffer: (offerId) => run(() => ({ game: rejectTransferOffer(get().game!, offerId) })),
+        rejectOffer: (offerId) =>
+          run(() => {
+            const game = rejectTransferOffer(get().game!, offerId);
+            return { game, step: pendingOffers(game).length ? 'TRANSFER' : nextStep(game, 'TRANSFER') };
+          }),
 
         requestTransfer: (clubId, type, playingTime) =>
           run(() => {
@@ -173,25 +231,32 @@ export const useGameStore = create<GameStore>()(
             let game = get().game;
             if (!game) return;
             for (let i = 0; i < turns && game.stage === 'READY'; i++) game = autoAdvance(game);
-            return { game, message: null };
+            return { game, message: null, step: nextStep(game, 'MATCH'), flash: null };
           }),
 
         clearMessage: () => set({ message: null }),
-        reset: () => set({ game: null, session: null, highlightPicks: [], ackedPopups: [], message: null }),
+        reset: () => set({ game: null, session: null, highlightPicks: [], ackedPopups: [], message: null, step: 'MATCH', flash: null }),
+        goStep: (step) => set({ step, flash: null }),
+        skipStep: () => {
+          const { game, step } = get();
+          if (game) set({ step: nextStep(game, step), flash: null });
+        },
       };
     },
     {
       name: SAVE_KEY,
       version: SAVE_VERSION,
       storage: createJSONStorage(() => localStorage),
-      partialize: ({ game, session, highlightPicks, ackedPopups }) => ({ game, session, highlightPicks, ackedPopups }),
+      partialize: ({ game, session, highlightPicks, ackedPopups, step }) => ({ game, session, highlightPicks, ackedPopups, step }),
       // 이전 버전 세이브는 구조가 달라 새로 시작한다
       migrate: () => ({ game: null, session: null, highlightPicks: [], ackedPopups: [] }),
       // 세이브를 불러올 때 구단 DB(data/external/)가 바뀌었으면 맞춘다 (턴 진행 중이면 턴이 끝난 뒤)
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<GameStore>;
         const game = saved.game && !saved.session && saved.game.stage === 'READY' ? syncWithDatabase(saved.game) : (saved.game ?? null);
-        return { ...current, ...saved, game };
+        // 단계 정보가 없는 예전 세이브는 할 일이 남은 첫 단계부터
+        const step = saved.step ?? (game ? nextStep(game, 'MATCH') : 'MATCH');
+        return { ...current, ...saved, game, step };
       },
     },
   ),

@@ -3,17 +3,17 @@
  *
  * 턴이 끝나면 다음 턴 전까지 플레이어는
  *  - 훈련 1회 (engine/growth.ts)
- *  - 물품 구매 1회 (engine/shop.ts)
+ *  - 물품 구매 1회 (engine/shop.ts) — 진열은 잔고로 살 수 있는 물건 중 무작위 3개
  *  - 사건 1~3개 응답 (engine/events.ts) — 모두 답해야 다음 턴 진행
  *  - 이적·임대·재계약 협상 (engine/transfer.ts)
  * 을 할 수 있다. 이 모듈은 페이즈 시작(자연 회복·사건 생성)과 진행 가능 여부를 담당한다.
  */
-import type { GameState, TrainingPlan, TurnPhase } from '@/types/game';
+import type { GameState, ShopItemDefinition, TrainingPlan, TurnPhase } from '@/types/game';
 import { rollEvents } from './events';
 import { applyTraining } from './growth';
 import { clamp, rngFor } from './rng';
 import { canPurchase, purchaseItem } from './shop';
-import { SHOP_ITEM_MAP } from '@/data/items';
+import { SHOP_ITEM_MAP, SHOP_ITEMS } from '@/data/items';
 import type { SimulationWorld } from './world';
 
 /** 턴 사이 자연 회복량 (방금 끝난 턴 기준) */
@@ -72,8 +72,27 @@ export function trainInterTurn(state: GameState, plan: TrainingPlan): GameState 
   return { ...state, player, interTurn: { ...state.interTurn, training: result } };
 }
 
+/** 상점에 한 번에 진열하는 물건 수 */
+export const SHOP_OFFER_COUNT = 3;
+
+/**
+ * 이번 턴 상점 진열: 아직 없고 지금 잔고로 살 수 있는 물건 중 무작위 3개.
+ * 순서는 (시드 · 시즌 · 턴)으로 고정해 같은 턴에는 다시 열어도 같은 물건이 나온다.
+ */
+export function shopOffers(state: GameState): ShopItemDefinition[] {
+  const rng = rngFor(state.seed, 'shop-offers', state.turn.season, state.turn.phase);
+  const { player } = state;
+  return rng
+    .shuffle(SHOP_ITEMS)
+    .filter((item) => item.price <= player.money && !player.inventory.some((owned) => owned.itemId === item.id))
+    .slice(0, SHOP_OFFER_COUNT);
+}
+
 export function buyInterTurn(state: GameState, itemId: string): GameState {
   if (state.stage !== 'READY') throw new Error('지금은 구매할 수 없습니다.');
+  if (state.interTurn.purchasedItemId === null && !shopOffers(state).some((item) => item.id === itemId)) {
+    throw new Error('이번 턴 상점에 진열되지 않은 물건입니다.');
+  }
   const item = SHOP_ITEM_MAP[itemId];
   const check = canPurchase(state.player, item, state.interTurn.purchasedItemId !== null);
   if (!check.ok) throw new Error(check.reason);

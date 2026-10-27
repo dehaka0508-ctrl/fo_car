@@ -317,12 +317,15 @@ function SituationView({
   const [skipped, setSkipped] = useState(false);
   const t = usePlayback(choreo, skipped, () => setDone(true));
   return (
-    <>
-      <div className="mx-auto w-full max-w-3xl">
-        <Pitch situation={situation} choreo={choreo} t={t} myKit={myKit} theirKit={theirKit} />
+    <div className="flex min-h-0 flex-1 flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-3">
+      {/* PC 16:9: 피치는 남은 높이에 맞춰 3:2로 / 휴대폰 세로: 피치 위, 선택지 아래 */}
+      <div className="flex shrink-0 items-center justify-center lg:min-h-0 lg:shrink">
+        <div className="w-full lg:max-w-[calc((100dvh-150px)*1.5)]">
+          <Pitch situation={situation} choreo={choreo} t={t} myKit={myKit} theirKit={theirKit} />
+        </div>
       </div>
-      {children({ done: !resolved || done, skip: () => setSkipped(true) })}
-    </>
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto lg:gap-3">{children({ done: !resolved || done, skip: () => setSkipped(true) })}</div>
+    </div>
   );
 }
 
@@ -361,8 +364,8 @@ export function HighlightScreen() {
   const opponentsTagged = briefing.taggedPlayers.filter((t) => t.side !== briefing.playerTeamSide);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-6">
-      <header className="px-panel m-[3px] flex flex-col gap-3 p-4">
+    <div className="mx-auto flex h-dvh w-full max-w-[1680px] flex-col gap-2 px-2 py-2 lg:gap-3 lg:px-3 lg:py-3">
+      <header className="px-panel m-[3px] flex flex-col gap-1.5 px-3 py-2 lg:gap-2 lg:px-4 lg:py-3">
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Tag tone="emerald">하이라이트 · {HIGHLIGHT_KIND_LABELS[briefing.kind]}</Tag>
           {isNational ? <Tag tone="sky">국가대표</Tag> : null}
@@ -372,11 +375,6 @@ export function HighlightScreen() {
         </div>
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            {appearance ? (
-              <PlayerStage className="hidden sm:flex">
-                <Avatar appearance={appearance} kit={myKit} size={86} idle label={`${briefing.protagonist.name} (경기 유니폼)`} />
-              </PlayerStage>
-            ) : null}
             <PlayerToken kit={myKit} size={22} />
             <span className="truncate text-sm font-bold text-zinc-50">{briefing.playerTeam.name}</span>
           </div>
@@ -395,7 +393,13 @@ export function HighlightScreen() {
 
       <SituationView key={situation.id} situation={situation} resolved={resolved} myKit={myKit} theirKit={theirKit}>
         {({ done, skip }) => (
-          <Card
+          <>
+            {appearance ? (
+              <PlayerStage className="hidden lg:flex">
+                <Avatar appearance={appearance} kit={myKit} size={86} idle label={`${briefing.protagonist.name} (경기 유니폼)`} />
+              </PlayerStage>
+            ) : null}
+            <Card
             title={`상황 ${viewIndex + 1} / ${situations.length} · ${situation.minute}분`}
             actions={<span className="text-xs text-zinc-500">선택 성공 {successes} / {picks.length}</span>}
           >
@@ -424,7 +428,7 @@ export function HighlightScreen() {
                 )}
               </div>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2">
                 {situation.options.map((option) => {
                   const chance = Math.round(optionSuccessChance(session, option) * 100);
                   const tone = chance >= 65 ? 'text-emerald-600 dark:text-emerald-400' : chance >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400';
@@ -443,15 +447,15 @@ export function HighlightScreen() {
                 })}
               </div>
             )}
-          </Card>
+            </Card>
+            <div className="flex justify-end">
+              <Button variant="ghost" onClick={autoHighlight}>
+                AI에게 맡기고 결과 보기
+              </Button>
+            </div>
+          </>
         )}
       </SituationView>
-
-      <div className="flex justify-end">
-        <Button variant="ghost" onClick={autoHighlight}>
-          AI에게 맡기고 결과 보기
-        </Button>
-      </div>
     </div>
   );
 }

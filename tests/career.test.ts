@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SHOP_ITEMS } from '@/data/items';
 import { GAME_EVENT_MAP } from '@/data/events';
 import { autoAnswerEvents, simulateCareer } from '@/engine/autoplay';
 import {
@@ -14,7 +15,7 @@ import {
 import type { CharacterInput } from '@/engine/character';
 import { resolveEvent, rollEvents } from '@/engine/events';
 import { buildHighlightScene, resolveSituationChoice } from '@/engine/highlight';
-import { beginInterTurn, buyInterTurn, seasonStartCondition, trainInterTurn } from '@/engine/interTurn';
+import { beginInterTurn, buyInterTurn, seasonStartCondition, shopOffers, trainInterTurn } from '@/engine/interTurn';
 import { rngFor } from '@/engine/rng';
 import type { GameState } from '@/types/game';
 
@@ -82,8 +83,28 @@ describe('턴 순서와 턴 사이 페이즈', () => {
     let state = { ...createCareer(input(), { seed: 5 }), player: { ...createCareer(input(), { seed: 5 }).player, money: 100_000 } };
     state = trainInterTurn(state, { kind: 'REST' });
     expect(() => trainInterTurn(state, { kind: 'REST' })).toThrow();
-    state = buyInterTurn(state, 'boots-strike');
-    expect(() => buyInterTurn(state, 'boots-control')).toThrow();
+    const [first, second] = shopOffers(state);
+    state = buyInterTurn(state, first.id);
+    expect(() => buyInterTurn(state, second.id)).toThrow();
+  });
+});
+
+describe('상점 진열', () => {
+  it('턴마다 잔고로 살 수 있는 물건 중 무작위 3개만 진열하고, 같은 턴에는 같은 물건이 나온다', () => {
+    const base = createCareer(input(), { seed: 7 });
+    const rich = { ...base, player: { ...base.player, money: 50_000_000 } };
+    const offers = shopOffers(rich);
+    expect(offers).toHaveLength(3);
+    expect(shopOffers(rich).map((i) => i.id)).toEqual(offers.map((i) => i.id));
+    // 다른 턴에는 진열이 바뀐다
+    const nextTurn = { ...rich, turn: { ...rich.turn, phase: 'SECOND_HALF' as const } };
+    expect(shopOffers(nextTurn).map((i) => i.id)).not.toEqual(offers.map((i) => i.id));
+    // 잔고가 적으면 살 수 있는 것만
+    const poor = { ...base, player: { ...base.player, money: 20_000 } };
+    for (const item of shopOffers(poor)) expect(item.price).toBeLessThanOrEqual(20_000);
+    // 진열되지 않은 물건은 살 수 없다
+    const hidden = SHOP_ITEMS.find((i) => !offers.some((o) => o.id === i.id))!;
+    expect(() => buyInterTurn(rich, hidden.id)).toThrow('진열');
   });
 });
 

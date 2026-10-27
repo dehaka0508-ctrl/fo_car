@@ -1,0 +1,165 @@
+'use client';
+
+import { useState, type ReactNode } from 'react';
+import { canRetire } from '@/engine/career';
+import { useGameStore } from '@/store/gameStore';
+import { FLOW_STEPS, type FlowStep } from '@/store/flow';
+import type { GameState } from '@/types/game';
+import { GameTopBar } from './GameTopBar';
+import { PlayerPanel } from './PlayerPanel';
+import { EventStep } from './steps/EventStep';
+import { MatchStep } from './steps/MatchStep';
+import { ShopStep } from './steps/ShopStep';
+import { TrainingStep } from './steps/TrainingStep';
+import { TransferStep } from './steps/TransferStep';
+import { RecordsTab } from './tabs/RecordsTab';
+import { PlayerTab } from './tabs/PlayerTab';
+import { MobileDashboard } from './MobileDashboard';
+import { TurnResultPanel } from './TurnResultPanel';
+import { Button, cx, Modal, Tag } from './ui';
+import { useIsDesktop } from './useIsDesktop';
+
+export const STEP_META: Record<FlowStep, { title: string; hint: string; skip?: string }> = {
+  MATCH: { title: '경기', hint: '턴을 진행해 경기를 치릅니다' },
+  EVENTS: { title: '사건 대응', hint: '모두 답해야 다음 경기를 할 수 있습니다', skip: '나중에 답하기' },
+  TRAINING: { title: '훈련', hint: '턴당 1회 · 고르면 바로 다음 단계로', skip: '훈련 건너뛰기' },
+  SHOP: { title: '물건 구매', hint: '턴당 1개 · 이번 턴 진열 3개', skip: '사지 않기' },
+  TRANSFER: { title: '이적', hint: '제안 수락·거절 · 역제의 · 재계약', skip: '다음 경기로' },
+};
+
+const STEP_BODY: Record<FlowStep, (game: GameState) => ReactNode> = {
+  MATCH: (game) => <MatchStep game={game} />,
+  EVENTS: (game) => <EventStep game={game} />,
+  TRAINING: (game) => <TrainingStep game={game} />,
+  SHOP: (game) => <ShopStep game={game} />,
+  TRANSFER: (game) => <TransferStep game={game} />,
+};
+
+export type DashboardModal = null | 'player' | 'records';
+
+/** 은퇴 · 세이브 삭제 (휴대폰에서는 선수 정보 창 아래에만 있다) */
+function CareerMenu({ game, onDone }: { game: GameState; onDone: () => void }) {
+  const retire = useGameStore((s) => s.retire);
+  const reset = useGameStore((s) => s.reset);
+  return (
+    <div className="mt-4 flex justify-end gap-2 border-t-2 border-dashed border-zinc-700 pt-3">
+      {canRetire(game) ? (
+        <Button
+          variant="danger"
+          onClick={() => {
+            if (window.confirm('정말 은퇴할까요? 되돌릴 수 없습니다.')) {
+              retire();
+              onDone();
+            }
+          }}
+        >
+          은퇴하기
+        </Button>
+      ) : null}
+      <Button
+        variant="ghost"
+        onClick={() => {
+          if (window.confirm('세이브를 지우고 새로 시작할까요?')) {
+            reset();
+            onDone();
+          }
+        }}
+      >
+        세이브 삭제
+      </Button>
+    </div>
+  );
+}
+
+/** 게임 메인 화면: PC(가로 16:9)와 휴대폰(세로 9:16) 배치를 따로 그린다. 둘 다 한 화면에 들어가고 페이지는 스크롤되지 않는다 */
+export function Dashboard({ game }: { game: GameState }) {
+  const desktop = useIsDesktop();
+  const [modal, setModal] = useState<DashboardModal>(null);
+  return (
+    <>
+      {desktop ? <DesktopDashboard game={game} onOpen={setModal} /> : <MobileDashboard game={game} onOpen={setModal} />}
+      {modal === 'player' ? (
+        <Modal wide title="선수 정보" onClose={() => setModal(null)}>
+          <PlayerTab game={game} />
+          <CareerMenu game={game} onDone={() => setModal(null)} />
+        </Modal>
+      ) : null}
+      {modal === 'records' ? (
+        <Modal wide title="기록실" onClose={() => setModal(null)}>
+          <RecordsTab game={game} />
+        </Modal>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * PC (16:9 한 화면)
+ *  왼쪽: 선수 카드 / 가운데: 지금 단계 (경기 → 사건 → 훈련 → 상점 → 이적) / 오른쪽: 턴 성적 · 턴별 기록 · 소식
+ */
+function DesktopDashboard({ game, onOpen }: { game: GameState; onOpen: (modal: DashboardModal) => void }) {
+  const step = useGameStore((s) => s.step);
+  const goStep = useGameStore((s) => s.goStep);
+  return (
+    <div className="mx-auto flex h-dvh w-full max-w-[1680px] flex-col gap-3 px-3 pb-3">
+      <GameTopBar game={game} step={step} onStep={goStep} />
+      <div className="grid min-h-0 flex-1 grid-cols-[272px_minmax(0,1fr)_360px] gap-3">
+        <PlayerPanel game={game} onOpen={(m) => onOpen(m)} />
+        <StepPanel game={game} step={step} />
+        <TurnResultPanel game={game} />
+      </div>
+    </div>
+  );
+}
+
+/** 지금 단계 패널 (PC는 제목 포함, 휴대폰은 compact: 제목은 위 단계 표시가 대신한다) */
+export function StepPanel({ game, step, compact = false }: { game: GameState; step: FlowStep; compact?: boolean }) {
+  const flash = useGameStore((s) => s.flash);
+  const message = useGameStore((s) => s.message);
+  const clearMessage = useGameStore((s) => s.clearMessage);
+  const skipStep = useGameStore((s) => s.skipStep);
+  const meta = STEP_META[step];
+
+  return (
+    <section className={cx('px-panel m-[3px] flex min-h-0 flex-col', compact && 'flex-1')}>
+      <header
+        className={cx(
+          'flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-dashed border-zinc-700',
+          compact ? 'px-3 py-2' : 'px-4 py-3',
+        )}
+      >
+        <h2 className="text-sm font-bold text-amber-300 drop-shadow-[2px_2px_0_#05080f]">
+          {FLOW_STEPS.indexOf(step) + 1}. {meta.title}
+        </h2>
+        <span className="text-[11px] text-zinc-400">{meta.hint}</span>
+      </header>
+
+      {message ? (
+        <div className="mx-3 mt-2 flex items-start justify-between gap-2 bg-sky-950/70 px-3 py-2 text-xs text-sky-200 shadow-[inset_0_0_0_1px_#0369a1]">
+          <span>{message}</span>
+          <button type="button" className="px-focus text-sky-300" onClick={clearMessage} aria-label="닫기">
+            ✕
+          </button>
+        </div>
+      ) : null}
+      {flash ? (
+        <div className="mx-3 mt-2 flex flex-wrap items-center gap-1.5 bg-emerald-950/70 px-3 py-2 text-xs shadow-[inset_0_0_0_1px_#1b7a41]">
+          <span className="font-pixel text-emerald-300">✓ {flash.title}</span>
+          {flash.lines.map((line, i) => (
+            <Tag key={i} tone={/-|실패/.test(line) ? 'rose' : 'emerald'}>
+              {line}
+            </Tag>
+          ))}
+        </div>
+      ) : null}
+
+      <div className={cx('min-h-0 flex-1 overflow-y-auto', compact ? 'px-3 py-2' : 'px-4 py-3')}>{STEP_BODY[step](game)}</div>
+
+      {meta.skip ? (
+        <footer className={cx('flex justify-end border-t-2 border-dashed border-zinc-700', compact ? 'px-3 py-1.5' : 'px-4 py-2')}>
+          <Button onClick={skipStep}>{meta.skip} ▶</Button>
+        </footer>
+      ) : null}
+    </section>
+  );
+}

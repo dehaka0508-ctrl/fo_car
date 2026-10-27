@@ -123,10 +123,10 @@ export function Field({ label, children, className }: { label: string; children:
   );
 }
 
-export function Modal({ children, onClose, title }: { children: ReactNode; onClose?: () => void; title: ReactNode }) {
+export function Modal({ children, onClose, title, wide = false }: { children: ReactNode; onClose?: () => void; title: ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#02040a]/75 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true">
-      <div className="px-panel m-[3px] max-h-[90vh] w-full max-w-lg overflow-y-auto p-5">
+      <div className={cx('px-panel m-[3px] max-h-[90vh] w-full overflow-y-auto p-5', wide ? 'max-w-5xl' : 'max-w-lg')}>
         <div className="mb-4 flex items-start justify-between gap-3 border-b-2 border-dashed border-zinc-700 pb-3">
           <h2 className="text-base font-bold text-amber-300 drop-shadow-[2px_2px_0_#05080f]">{title}</h2>
           {onClose ? (
