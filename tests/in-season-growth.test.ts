@@ -3,7 +3,7 @@ import { makePlayer } from './helpers';
 import { emptyStatsByCompetition } from '@/engine/character';
 import { createCareer, playTurnAuto } from '@/engine/career';
 import { autoAnswerEvents } from '@/engine/autoplay';
-import { developPlayerDuringTurn, turnDevelopmentFactors, fieldAttributeAverage } from '@/engine/growth';
+import { developPlayerDuringTurn, turnDevelopmentFactors, fieldAttributeAverage, fieldGrowthRate, applyTraining } from '@/engine/growth';
 import { calculateOVR } from '@/engine/ovr';
 import { rngFor } from '@/engine/rng';
 import { ATTRIBUTE_KEYS, FIELD_STAT_KEYS, GK_STAT_KEYS, type PlayerState } from '@/types/game';
@@ -120,13 +120,17 @@ describe('성장 속도', () => {
     expect(progress(young, 1080)).toBeGreaterThan(progress(adult, 1080));
   });
 
-  it('높은 포텐셜도 주전 출전을 이어가면 20대 후반까지 채울 수 있다', () => {
+  it('높은 포텐셜도 주전 출전과 핵심 훈련을 이어가면 20대 후반까지 채울 수 있다', () => {
     for (const potential of [85, 95, 99]) {
       let player = { ...makePlayer({ age: 16 }), potential, condition: 85 };
-      for (let age = 16; age <= 28; age++) {
+      for (let age = 16; age <= 29; age++) {
         player = { ...player, age };
         for (let turn = 0; turn < 3; turn++) {
+          if (potential - fieldAttributeAverage(player.attributes) > 1) {
+            player = applyTraining(player, { kind: 'FOCUSED', attributes: ['finishing', 'offTheBall'], intensity: 'NORMAL' }, rngFor(31, age, turn, 'train')).player;
+          }
           player = developPlayerDuringTurn(player, performance(1080, 7), rngFor(31, age, turn), 31).player;
+          player = { ...player, condition: Math.min(100, player.condition + 15) };
           expect(fieldAttributeAverage(player.attributes)).toBeLessThanOrEqual(potential);
         }
       }
@@ -148,8 +152,34 @@ describe('남은 잠재력에 비례하는 성장', () => {
       };
       const far = run(40); // 60점 차이
       const near = run(80); // 20점 차이
-      expect(far / near).toBeGreaterThan(2.5);
-      expect(far / near).toBeLessThan(3);
+      const rate = fieldGrowthRate(age);
+      expect(Math.abs(far / near - (60 * rate + 1) / (20 * rate + 1))).toBeLessThan(0.15);
     }
   });
 });
+
+
+describe('조기 성장 완성 방지', () => {
+  it('매 턴 핵심 능력치를 훈련해도 21세에 완성되지 않고 20대 후반까지 더 성장한다', () => {
+    let player = { ...makePlayer({ age: 16, seed: 1 }), potential: 88, condition: 100 };
+    let at21 = 0;
+    let at27 = 0;
+    let fullAge: number | null = null;
+    for (let age = 16; age <= 29; age++) {
+      player = { ...player, age };
+      for (let turn = 0; turn < 3; turn++) {
+        if (88 - fieldAttributeAverage(player.attributes) > 1) player = applyTraining(player, { kind: 'FOCUSED', attributes: ['finishing', 'offTheBall'], intensity: 'INTENSE' }, rngFor(77, age, turn, 'training')).player;
+        player = developPlayerDuringTurn(player, performance(1080, 7.2), rngFor(77, age, turn), 77).player;
+        player = { ...player, condition: 100 };
+        if (fullAge === null && fieldAttributeAverage(player.attributes) >= 88) fullAge = age;
+      }
+      if (age === 21) at21 = player.ovr;
+      if (age === 27) at27 = player.ovr;
+    }
+    expect(at27).toBeGreaterThan(at21 + 2);
+    expect(fullAge).not.toBeNull();
+    expect(fullAge).toBeGreaterThanOrEqual(25);
+    expect(fullAge).toBeLessThanOrEqual(29);
+  });
+});
+

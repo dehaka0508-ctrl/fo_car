@@ -46,6 +46,8 @@ export const GROWTH_CONFIG = {
   training: {
     /** 카테고리 훈련: 세부 3개 각각 */
     categoryBase: 1.15,
+    /** 필드는 경기 성장과 훈련의 중첩으로 조기 완성되지 않도록 조정. GK는 기존 효율 유지. */
+    fieldEfficiency: 0.6,
     /** 세부 훈련: 고른 개수별 1개당 */
     focusedBase: { 2: 2.1, 3: 1.6 } as Record<number, number>,
     /** 벌크업·감량 주 능력치 변화 */
@@ -262,6 +264,7 @@ export function expectedTrainingGain(player: PlayerState, key: AttributeKey): nu
     levelFactor(player.attributes[key], potentialOf(player)) *
     focusMultiplier(player, key) *
     positionTrainingEfficiency(player.profile.role.position) *
+    (player.profile.role.position === 'GK' ? 1 : GROWTH_CONFIG.training.fieldEfficiency) *
     potentialFactor(player)
   );
 }
@@ -290,7 +293,7 @@ export function previewTraining(player: PlayerState, plan: TrainingPlan): Traini
   }
   if (plan.kind === 'WEAK_FOOT') return { gains: {}, weakFootDelta: Math.min(3, 100 - (player.weakFoot ?? 40)), weightDelta: 0, conditionDelta: -8, mentalDelta: 0 };
   const intensity = t.intensity[plan.intensity];
-  const age = trainingAgeFactor(player.age) * positionTrainingEfficiency(player.profile.role.position);
+  const age = trainingAgeFactor(player.age) * positionTrainingEfficiency(player.profile.role.position) * (player.profile.role.position === 'GK' ? 1 : t.fieldEfficiency);
   const potential = potentialOf(player);
   const cap = potentialFactor(player);
   const gains: Partial<Record<AttributeKey, number>> = {};
@@ -571,8 +574,8 @@ export function turnDevelopmentFactors(player: PlayerState, stats: Record<Compet
 
 /** 남은 평균 격차 중 1년 동안 성장하는 비율. 어린 선수일수록 높다. */
 export function fieldGrowthRate(age: number): number {
-  const curve: ReadonlyArray<[number, number]> = [[16, 0.4], [19, 0.35], [23, 0.3], [27, 0.28], [30, 0.1], [32, 0]];
-  if (age <= 16) return 0.4;
+  const curve: ReadonlyArray<[number, number]> = [[16, 0.18], [19, 0.17], [23, 0.16], [27, 0.15], [30, 0.06], [32, 0]];
+  if (age <= 16) return 0.18;
   for (let i = 1; i < curve.length; i++) {
     const [end, value] = curve[i];
     const [start, previous] = curve[i - 1];
@@ -595,7 +598,7 @@ function applyFieldDevelopment(player: PlayerState, factors: ReturnType<typeof t
   const shares = FIELD_STAT_KEYS.filter((key) => player.attributes[key] < 99).map((key) => ({
     key,
     // 모든 필드 능력치가 같은 평균 한도에 도달할 수 있어야 한다. 핵심 능력치는 먼저 자란다.
-    share: (0.65 + (weights[key] ?? 0)) * Math.max(0.35, turnGrowthRate(GROWTH_GROUP[key], player.age)) * Math.sqrt((100 - player.attributes[key]) / 60) * focusMultiplier(player, key),
+    share: (1 + 0.5 * (weights[key] ?? 0)) * Math.max(0.35, turnGrowthRate(GROWTH_GROUP[key], player.age)) * Math.sqrt((100 - player.attributes[key]) / 60) * focusMultiplier(player, key),
   }));
   const sum = shares.reduce((total, item) => total + item.share, 0);
   const expected = Object.fromEntries(shares.map(({ key, share }) => [key, points * share / sum]));
