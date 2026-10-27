@@ -13,7 +13,7 @@ import {
   turnGrowthRate,
   validateTrainingPlan,
 } from '@/engine/growth';
-import { emptyStatsByCompetition, rollPotential } from '@/engine/character';
+import { emptyStatsByCompetition, potentialDistribution, rollPotential } from '@/engine/character';
 import { ATTRIBUTE_KEYS, type AttributeKey } from '@/types/game';
 import { rngFor } from '@/engine/rng';
 import { canPurchase, previewItemEffect, purchaseItem } from '@/engine/shop';
@@ -113,11 +113,24 @@ describe('경험 성장과 노화', () => {
 });
 
 describe('숨은 포텐셜 · 매 턴 자연 성장', () => {
-  it('포텐셜은 시드마다 80~100 사이에서 정해진다', () => {
-    const values = Array.from({ length: 200 }, (_, i) => rollPotential(i + 1));
+  it('포텐셜은 80~100 볼츠만 분포: 80이 가장 흔하고 높을수록 지수적으로 드물다', () => {
+    const dist = potentialDistribution();
+    expect(dist[0].potential).toBe(80);
+    expect(dist.at(-1)!.potential).toBe(100);
+    expect(dist.reduce((a, d) => a + d.probability, 0)).toBeCloseTo(1, 10);
+    for (let i = 1; i < dist.length; i++) expect(dist[i].probability).toBeLessThan(dist[i - 1].probability);
+    // 표본: 5000명
+    const values = Array.from({ length: 5000 }, (_, i) => rollPotential(i + 1));
+    const share = (f: (v: number) => boolean) => values.filter(f).length / values.length;
     expect(Math.min(...values)).toBeGreaterThanOrEqual(80);
     expect(Math.max(...values)).toBeLessThanOrEqual(100);
-    expect(new Set(values).size).toBeGreaterThan(15);
+    expect(share((v) => v === 80)).toBeGreaterThan(0.15);
+    expect(share((v) => v >= 90)).toBeGreaterThan(0.08);
+    expect(share((v) => v >= 90)).toBeLessThan(0.16);
+    expect(share((v) => v >= 95)).toBeLessThan(0.06);
+    const mean = values.reduce((a, v) => a + v, 0) / values.length;
+    expect(mean).toBeGreaterThan(83.5);
+    expect(mean).toBeLessThan(85.5);
     expect(rollPotential(7)).toBe(rollPotential(7));
   });
 

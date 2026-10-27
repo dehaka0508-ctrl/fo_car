@@ -168,9 +168,26 @@ export interface CharacterInput {
   clubId: ID;
 }
 
-/** 숨은 포텐셜(최대 OVR): 80~100 균등. 다른 초기값의 난수 흐름과 섞이지 않도록 별도 스트림 */
+/**
+ * 숨은 포텐셜(최대 OVR) 분포: 볼츠만 분포 — 80이 가장 흔하고 100으로 갈수록 지수적으로 드물다.
+ *   P(포텐셜 = 80 + k) ∝ e^(−k / temperature),  k = 0 … 20
+ * temperature 5: 80 ≈ 18% · 90+ ≈ 12% · 95+ ≈ 3.5% · 100 ≈ 0.3% · 평균 ≈ 84.5
+ */
+export const POTENTIAL_CONFIG = { min: 80, max: 100, temperature: 5 } as const;
+
+/** 포텐셜 값별 확률 (합 1) */
+export function potentialDistribution(): Array<{ potential: number; probability: number }> {
+  const { min, max, temperature } = POTENTIAL_CONFIG;
+  const weights = Array.from({ length: max - min + 1 }, (_, k) => Math.exp(-k / temperature));
+  const total = weights.reduce((a, w) => a + w, 0);
+  return weights.map((w, k) => ({ potential: min + k, probability: w / total }));
+}
+
+/** 숨은 포텐셜을 뽑는다 (볼츠만 분포). 다른 초기값의 난수 흐름과 섞이지 않도록 별도 스트림 */
 export function rollPotential(seed: number): number {
-  return 80 + rngFor(seed, 'potential').int(0, 20);
+  const { min, max, temperature } = POTENTIAL_CONFIG;
+  const weights = Array.from({ length: max - min + 1 }, (_, k) => Math.exp(-k / temperature));
+  return min + rngFor(seed, 'potential').weightedIndex(weights);
 }
 
 export function createPlayer(
