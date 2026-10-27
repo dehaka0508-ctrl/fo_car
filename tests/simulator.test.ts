@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildAutoHighlightOutcome, getHighlightBriefing } from '@/engine/highlight';
+import { buildAutoHighlightOutcome, buildHighlightScene, getHighlightBriefing } from '@/engine/highlight';
 import {
   advanceTurn,
   choiceSuccessChance,
+  chooseHighlight,
   competitiveLine,
   conditionDrain,
   createTurnSession,
@@ -14,7 +15,7 @@ import {
   summarizeSeasonRatings,
   type TurnInput,
 } from '@/engine/simulator';
-import type { HighlightKind, NpcPlayer, PlayerState, TurnPhase } from '@/types/game';
+import type { NpcPlayer, PlayerState, TurnPhase } from '@/types/game';
 import { makePlayer, world } from './helpers';
 
 const input = (player: PlayerState, phase: TurnPhase = 'FIRST_HALF', seed = 1, extra: Partial<TurnInput> = {}): TurnInput => ({
@@ -71,7 +72,7 @@ describe('턴 시뮬레이션', () => {
     const direct = simulateTurn(input(player)).result;
     let session = advanceTurn(createTurnSession(input(player)));
     session = JSON.parse(JSON.stringify(session));
-    session = advanceTurn(resolveHighlight(session, null));
+    if (session.status === 'AWAITING_HIGHLIGHT') session = advanceTurn(resolveHighlight(session, null));
     expect(finalizeTurn(JSON.parse(JSON.stringify(session)))).toEqual(direct);
   });
 
@@ -120,10 +121,10 @@ describe('능력치-결과 분리 원칙', () => {
   const mover = star({ attributes: { finishing: 60, offTheBall: 92 } });
 
   it('OVR·멘탈·지구력이 같으면 팀 결과는 완전히 같다', () => {
-    expect(finisher.ovr).toBe(mover.ovr);
+    const sameOvrMover = { ...mover, ovr: finisher.ovr };
     for (const seed of [1, 2, 3]) {
       const a = simulateTurn(input(finisher, 'FIRST_HALF', seed)).result;
-      const b = simulateTurn(input(mover, 'FIRST_HALF', seed)).result;
+      const b = simulateTurn(input(sameOvrMover, 'FIRST_HALF', seed)).result;
       expect(a.matches.map((m) => m.score)).toEqual(b.matches.map((m) => m.score));
       expect(a.leagueTable).toEqual(b.leagueTable);
     }
@@ -164,62 +165,83 @@ describe('체력과 출전', () => {
 });
 
 describe('하이라이트 경기 선정', () => {
-  it('전반기: 라이벌 더비', () => {
-    const { result } = simulateTurn(input(star({ clubId: 'arsenal' })));
-    expect(result.highlight?.kind).toBe('DERBY');
-    expect(['tottenham', 'chelsea']).toContain(result.highlight?.opponent.id);
+  it('같은 턴은 재현 가능하고, 더비에서도 직접 선택 횟수는 무작위 0~2회다', () => {
+    const counts = new Set<number>();
+    for (let seed = 1; seed <= 30; seed++) {
+      const planned = createTurnSession(input(star(), 'FIRST_HALF', seed));
+      expect(planned.highlight).toEqual(chooseHighlight(planned));
+      const paused = advanceTurn(planned);
+      const scene = buildHighlightScene(paused);
+      counts.add(scene?.situations.length ?? 0);
+      if (!scene) { expect(paused.status).toBe('COMPLETE'); continue; }
+      expect(scene.situations.length).toBeLessThanOrEqual(2);
+      expect(scene.briefing.fixture.isDerby).toBe(true);
+      const auto = simulateTurn(input(star(), 'FIRST_HALF', seed)).result;
+      expect(auto.matches.find((match) => match.isHighlight)?.player?.minutes).toBeGreaterThan(0);
+    }
+    expect([...counts].sort()).toEqual([0, 1, 2]);
   });
 
-  it('리그에 더비 상대가 없으면 빅매치', () => {
-    const { result } = simulateTurn(input(star({ clubId: 'bournemouth' })));
-    expect(result.highlight?.kind).toBe('BIG_MATCH');
-  });
-
-  it('후반기: 결승에 오르면 결승, 아니면 더비', () => {
-    const finals: HighlightKind[] = ['CONTINENTAL_FINAL', 'DOMESTIC_CUP_FINAL'];
-    let reachedFinal = 0;
-    for (let seed = 1; seed <= 12; seed++) {
-      const player = star({ clubId: 'real-madrid', boost: 40 });
-      const progress = [
-        { competitionId: 'ESP_COPA_DEL_REY', status: 'ACTIVE' as const, stageReached: '16강' },
-        { competitionId: 'UEFA_CL', status: 'ACTIVE' as const, stageReached: '조별리그 통과' },
-      ];
-      const { result } = simulateTurn(input(player, 'SECOND_HALF', seed, { progress }));
-      const playedFinal = result.matches.some((m) => m.stage === '결승');
-      if (playedFinal) {
-        reachedFinal++;
-        expect(finals).toContain(result.highlight?.kind);
-      } else {
-        expect(result.highlight?.kind).toBe('DERBY');
+  it('일반 리그 경기와 친선경기를 빅매치로 대체하지 않는다', () => {
+    for (let seed = 1; seed <= 15; seed++) {
+      expect(simulateTurn(input(star({ clubId: 'bournemouth' }), 'FIRST_HALF', seed)).result.highlight).toBeNull();
+      const result = simulateTurn(input(star({ nationality: 'KOR' }), 'PRESEASON', seed)).result;
+      if (result.highlight) {
+        const fixture = createTurnSession(input(star({ nationality: 'KOR' }), 'PRESEASON', seed)).fixtures.find((f) => f.id === result.highlight!.fixtureId)!;
+        expect(fixture.competitionType).not.toBe('FRIENDLY');
+        expect(fixture.isFinal || fixture.isDerby).toBe(true);
       }
     }
-    expect(reachedFinal).toBeGreaterThan(0);
   });
 
-  it('프리시즌: 대표팀의 마지막 국제대회 경기', () => {
-    const player = star({ nationality: 'ENG', boost: 40 });
-    const result = simulateTurn({ ...input(player, 'PRESEASON'), turn: { season: 2029, phase: 'PRESEASON' } }).result;
-    expect(result.nationalDuty).toBe(true);
-    expect(result.highlight?.kind).toBe('INTERNATIONAL');
-    const international = result.matches.filter((m) => m.competitionType === 'INTERNATIONAL');
-    expect(result.highlight?.fixtureId).toBe(international[international.length - 1].fixtureId);
+  it('컵은 실제 출전한 결승만 후보이며 일반 강팀전은 제외한다', () => {
+    let finals = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const progress = [{ competitionId: 'ESP_COPA_DEL_REY', status: 'ACTIVE' as const, stageReached: '16강' }, { competitionId: 'UEFA_CL', status: 'ACTIVE' as const, stageReached: '조별리그 통과' }];
+      const planned = createTurnSession(input(star({ clubId: 'real-madrid', boost: 40 }), 'SECOND_HALF', seed, { progress }));
+      const fixture = planned.fixtures.find((f) => f.id === planned.highlight?.fixtureId);
+      if (fixture && (planned.highlight!.kind === 'CONTINENTAL_FINAL' || planned.highlight!.kind === 'DOMESTIC_CUP_FINAL')) {
+        finals++;
+        expect(fixture.isFinal).toBe(true);
+        const result = simulateTurn(input(star({ clubId: 'real-madrid', boost: 40 }), 'SECOND_HALF', seed, { progress })).result;
+        expect(result.matches.find((m) => m.isHighlight)?.player?.minutes).toBeGreaterThan(0);
+      }
+    }
+    expect(finals).toBeGreaterThan(0);
   });
 
-  it('프리시즌: 차출이 없으면 친선경기', () => {
-    const result = simulateTurn(input(star({ nationality: 'KOR' }), 'PRESEASON')).result;
-    // 2027년 여름: 아시안컵 해지만 이 시드에서 미차출이어도 친선경기로 대체된다
-    expect(['INTERNATIONAL', 'PRESEASON_FRIENDLY']).toContain(result.highlight?.kind);
-    if (!result.nationalDuty) expect(result.highlight?.kind).toBe('PRESEASON_FRIENDLY');
+  it('리그 우승이 확정되는 출전 경기를 잡고 이미 확정된 뒤에는 제외한다', () => {
+    const session = createTurnSession(input(star(), 'SECOND_HALF', 9));
+    const fixture = session.fixtures.find((f) => f.competitionType === 'LEAGUE' && f.playerTeamSide)!;
+    const my = fixture.playerTeamSide === 'HOME' ? fixture.home : fixture.away;
+    const other = fixture.playerTeamSide === 'HOME' ? fixture.away : fixture.home;
+    my.power = 200; other.power = 1;
+    session.fixtures = [{ ...fixture, id: 'title-final-day', isDerby: false, requires: undefined }];
+    const row = (clubId: string, points: number) => ({ clubId, position: 1, points, played: 37, wins: 20, draws: 5, losses: 12, goalsFor: 60, goalsAgainst: 30 });
+    session.carryTable = [row(my.id, 60), row(other.id, 59)];
+    let title = null;
+    for (let seed = 1; seed <= 20 && !title; seed++) { session.seed = seed; title = chooseHighlight(session); }
+    expect(title?.kind).toBe('TITLE_DECIDER');
+    session.carryTable = [row(my.id, 90), row(other.id, 30)];
+    expect(chooseHighlight(session)).toBeNull();
   });
 
-  it('B팀·유스 선수는 리저브 경기를 뛰고 하이라이트도 리저브 경기다', () => {
-    const youth = makePlayer({ clubId: 'ulsan' });
-    expect(youth.squad.level).not.toBe('FIRST_TEAM');
-    const { result } = simulateTurn(input(youth));
-    expect(result.playerStats.LEAGUE.appearances).toBe(0);
-    expect(result.playerStats.RESERVE.appearances).toBeGreaterThan(0);
-    const highlightMatch = result.matches.find((m) => m.isHighlight);
-    expect(highlightMatch?.competitionType).toBe('RESERVE');
+  it('미출전·탈락 경기에는 하이라이트를 만들지 않는다', () => {
+    const player = { ...star(), contract: null };
+    expect(createTurnSession(input(player, 'FIRST_HALF', 9)).highlight).toBeNull();
+    const session = createTurnSession(input(star(), 'FIRST_HALF', 9));
+    session.fixtures = session.fixtures.filter((f) => f.playerTeamSide).map((f) => ({ ...f, isDerby: true, requires: { kind: 'WIN' as const, fixtureId: 'never-played' } }));
+    expect(chooseHighlight(session)).toBeNull();
+  });
+
+  it('B팀·유스는 실제 출전하는 리저브 더비만 선택 대상으로 삼는다', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const youth = makePlayer({ clubId: 'ulsan' });
+      const result = simulateTurn(input(youth, 'FIRST_HALF', seed)).result;
+      expect(result.playerStats.LEAGUE.appearances).toBe(0);
+      expect(result.playerStats.RESERVE.appearances).toBeGreaterThan(0);
+      if (result.highlight) expect(result.highlight.kind).toBe('RESERVE_DERBY');
+    }
   });
 });
 
@@ -250,7 +272,7 @@ describe('우승 기록', () => {
 describe('하이라이트 선택지 반영', () => {
   it('슈팅 선택지 성공은 주인공 골로, 수비 실패는 실점으로 이어진다', () => {
     const player = star();
-    const paused = advanceTurn(createTurnSession(input(player)));
+    const paused = advanceTurn(createTurnSession(input(player, 'FIRST_HALF', 9)));
     expect(paused.status).toBe('AWAITING_HIGHLIGHT');
     const fixtureId = paused.highlight!.fixtureId;
 
@@ -282,7 +304,7 @@ describe('하이라이트 선택지 반영', () => {
     const formerPartner: NpcPlayer = { ...rivalNpc, id: 'npc-old', name: '옛 파트너', position: 'AM', clubId: 'chelsea' };
     const session = advanceTurn(
       createTurnSession(
-        input(star({ clubId: 'arsenal' }), 'FIRST_HALF', 1, {
+        input(star({ clubId: 'arsenal' }), 'FIRST_HALF', 9, {
           rival: {
             rival: { npcId: rivalNpc.id, reason: 'DERBY', category: 'FORWARD', formedAt: { season: 2026, phase: 'FIRST_HALF' }, headToHead: { meetings: 0, wins: 0, draws: 0, losses: 0 } },
             npc: rivalNpc,

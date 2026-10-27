@@ -41,6 +41,8 @@ export const COMPETITION_TYPE_LABELS: Record<CompetitionType, string> = {
 
 export const HIGHLIGHT_KIND_LABELS: Record<HighlightKind, string> = {
   DERBY: '라이벌 더비',
+  RIVAL_MATCH: '라이벌전',
+  TITLE_DECIDER: '리그 우승 결정전',
   BIG_MATCH: '빅매치',
   DOMESTIC_CUP_FINAL: '국내컵 결승',
   CONTINENTAL_FINAL: '대륙컵 결승',

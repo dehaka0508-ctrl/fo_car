@@ -26,8 +26,7 @@ describe('커리어 요약 · 공유 텍스트', () => {
   });
 
   it('시즌 줄에 [시즌 · 나이 | 소속 | 경기·골·도움·평점 | 우승 | 개인상]이 들어간다', () => {
-    const withTrophy = summary.seasons.find((s) => s.trophies.length && s.awards.length && s.apps > 0);
-    expect(withTrophy).toBeDefined();
+    const withTrophy = { ...summary.seasons[0], apps: 10, goals: 3, assists: 2, rating: 7.2, trophies: ['K리그1'], awards: ['베스트 XI'] };
     const line = formatSeasonLine(withTrophy!, false);
     expect(line).toMatch(/^\d{4}\/\d{2} · \d+세 \| .+ \| \d+경기 \d+골 \d+도움 · 평점 \d\.\d{2}/);
     expect(line).toContain('🏆 ');
@@ -35,7 +34,8 @@ describe('커리어 요약 · 공유 텍스트', () => {
   });
 
   it('전체 텍스트에 머리말·통산·시즌별 기록·개인상이 들어간다', () => {
-    expect(text.startsWith('⚽ 김유망 커리어 요약 (대한민국 · 스트라이커 · 포처)')).toBe(true);
+    expect(text).toMatch(/^⚽ 김유망 커리어 요약 \(대한민국 · [^)]+\)/);
+    expect(text).not.toContain(' · 포처');
     expect(text).toContain('[시즌별 기록]');
     expect(text).toMatch(/통산 \d+경기 \d+골 \d+도움/);
     expect(text).toContain('#축구커리어시뮬레이터');

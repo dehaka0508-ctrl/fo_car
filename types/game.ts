@@ -528,6 +528,10 @@ export interface PlayerMatchLine {
   assists: number;
   cleanSheet: boolean;
   saves: number;
+  /** 성공한 태클. 도입 전 세이브에는 없을 수 있다. */
+  tackles?: number;
+  passesAttempted?: number;
+  passesCompleted?: number;
   /** 슈팅으로 이어진 결정적 패스 (도움 포함) */
   keyPasses: number;
   rating: number;
@@ -562,6 +566,10 @@ export interface PlayerStatLine {
   assists: number;
   cleanSheets: number;
   saves: number;
+  /** 성공한 태클. 도입 전 세이브에는 없을 수 있다. */
+  tackles?: number;
+  passesAttempted?: number;
+  passesCompleted?: number;
   /** 키패스 (도움 포함) */
   keyPasses: number;
   /** 평균 평점 = ratingSum / appearances */
@@ -589,6 +597,8 @@ export interface StandingRow extends TeamRecord {
 
 export type HighlightKind =
   | 'DERBY'
+  | 'RIVAL_MATCH'
+  | 'TITLE_DECIDER'
   | 'BIG_MATCH' // 더비 상대가 없을 때의 빅매치
   | 'DOMESTIC_CUP_FINAL'
   | 'CONTINENTAL_FINAL'
@@ -624,6 +634,8 @@ export interface SituationOption {
 }
 
 export interface MatchSituation {
+  /** 경기 맥락 식별자 (예: incoming-cross). */
+  context?: string;
   id: ID;
   minute: number;
   description: string;
@@ -701,6 +713,8 @@ export interface TrophyWin {
 }
 
 export interface TurnResult {
+  /** 해당 턴을 실제로 치른 포지션 (포지션 변경 후에도 성적 구분 유지). */
+  playerPosition?: Position;
   turn: TurnPointer;
   clubId: ID | null;
   leagueId: ID | null;
@@ -805,6 +819,7 @@ export type GameFlag =
   | 'PRESEASON_REST';
 
 export type EventEffect =
+  | { kind: 'POSITION'; position: Position }
   | { kind: 'MENTAL'; delta: number }
   | { kind: 'CONDITION'; delta: number }
   | { kind: 'ATTRIBUTE'; key: AttributeKey; delta: number }
@@ -877,9 +892,11 @@ export type TrainingPlan =
   | { kind: 'BULK_UP'; intensity: TrainingIntensity }
   /** 몸무게↓ 가속력·민첩성↑ / 몸싸움·제공권↓ */
   | { kind: 'CUT'; intensity: TrainingIntensity }
-  | { kind: 'REST' };
+  | { kind: 'REST' }
+  | { kind: 'WEAK_FOOT' };
 
 export interface TrainingResult {
+  weakFootDelta?: number;
   plan: TrainingPlan;
   deltas: Partial<Record<AttributeKey, number>>;
   weightDelta: number;
@@ -922,8 +939,11 @@ export interface OwnedItem {
 // 주인공
 // ============================================================================
 
-/** 캐릭터 생성 시 고정되는 정보 */
+/** 선수 기본 정보 (현재 포지션은 사건으로 변경 가능) */
+export type DominantFoot = 'LEFT' | 'RIGHT';
+
 export interface PlayerProfile {
+  dominantFoot: DominantFoot;
   id: ID;
   name: string;
   nationality: NationCode;
@@ -950,6 +970,8 @@ export interface ClubSpell {
 }
 
 export interface PlayerState {
+  /** 약발 숙련도 0~100. 필드 능력치 평균에는 포함하지 않는다. */
+  weakFoot: number;
   profile: PlayerProfile;
   age: number;
   /** 벌크업/감량으로 변동 */
@@ -957,7 +979,7 @@ export interface PlayerState {
   attributes: Attributes;
   /** 현재 포지션·스타일 기준 OVR (캐시) */
   ovr: number;
-  /** 숨은 포텐셜 = 도달할 수 있는 최대 OVR (80~100, 커리어 시작 때 무작위). 화면에는 보이지 않는다 */
+  /** 숨은 성장 한도: 필드 선수는 18개 필드 능력치의 단순 평균(60~100), GK는 기존 최대 OVR(80~100). 화면에는 보이지 않는다 */
   potential: number;
   reputation: number;
   /** 체력(컨디션) 0~100: 매 턴 실제 출전 경기 수를 결정 */

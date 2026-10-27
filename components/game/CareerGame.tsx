@@ -25,6 +25,7 @@ export function CareerGame() {
   const hydrated = useHydrated();
   const game = useGameStore((s) => s.game);
   const session = useGameStore((s) => s.session);
+  const showTurnReport = useGameStore((s) => s.showTurnReport);
   const ackedPopups = useGameStore((s) => s.ackedPopups);
 
   if (!hydrated) {
@@ -34,7 +35,7 @@ export function CareerGame() {
 
   const popups = pendingPopups(game, ackedPopups);
   const ceremony = game.ceremonies[0];
-  const overlay = ceremony ? (
+  const overlay = showTurnReport && game.stage === 'READY' ? null : ceremony ? (
     <CeremonyModal ceremony={ceremony} />
   ) : popups.length ? (
     <NoticePopup notice={popups[0]} pending={popups} />

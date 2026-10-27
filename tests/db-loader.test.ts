@@ -213,7 +213,8 @@ describe('이적 지역성', () => {
     const shares = offerRegionShares(youth)!;
     expect(shares.SAME_NATION).toBeGreaterThan(0.5);
     expect(shares.ELSEWHERE).toBeLessThan(0.1);
-    const mix = regionMix(youth, 'TRANSFER');
+    // 권역 배분 검증은 실제 이적 후보가 존재하는 실력으로 고정한다.
+    const mix = regionMix({ ...youth, player: { ...youth.player, ovr: 56 } }, 'TRANSFER');
     expect(mix.SAME_NATION).toBeGreaterThan(0.5);
     expect(mix.ELSEWHERE).toBeLessThan(0.15);
   });

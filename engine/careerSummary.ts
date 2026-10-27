@@ -4,7 +4,7 @@
  * 시즌별 [시즌 · 나이 / 소속팀 / 경기 · 골 · 도움(GK는 클린시트) · 평점 / 우승 / 개인상]을 정리하고,
  * 게시판·메신저에 그대로 붙여 넣을 수 있는 텍스트로 만든다.
  */
-import { POSITION_META, getPlayStyle } from '@/data/playstyles';
+import { POSITION_META } from '@/data/playstyles';
 import type { AwardWin, CompetitionType, GameState, ID, PlayerStatLine } from '@/types/game';
 import { AWARD_LABELS } from './awards';
 import { emptyStatsByCompetition } from './character';
@@ -161,7 +161,7 @@ export function buildCareerSummary(state: GameState, world: SimulationWorld): Ca
   return {
     name: player.profile.name,
     nationality: world.nations[player.profile.nationality]?.nameKo ?? player.profile.nationality,
-    role: `${POSITION_META[position].label} · ${getPlayStyle(player.profile.role.playStyle).label}`,
+    role: POSITION_META[position].label,
     isGoalkeeper,
     span: `${seasonText(firstSeason)} ~ ${seasonText(lastSeason)}`,
     status: state.retirement ? `${state.retirement.age}세 은퇴` : `현역 ${player.age}세`,

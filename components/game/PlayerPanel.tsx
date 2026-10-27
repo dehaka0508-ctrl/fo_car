@@ -3,7 +3,6 @@
 import { Avatar } from '@/components/Avatar';
 import { PlayerStage } from '@/components/pixel/PlayerStage';
 import { SQUAD_LEVEL_LABELS } from '@/data/labels';
-import { PLAYSTYLE_DEFINITIONS } from '@/data/playstyles';
 import { BASE_WORLD, canRetire } from '@/engine/career';
 import { formatMoney } from '@/engine/state';
 import { useGameStore } from '@/store/gameStore';
@@ -12,7 +11,7 @@ import { clubLabel, playingTimeLabel, seasonLabel } from './format';
 import { Button, Meter, Tag } from './ui';
 
 /** 왼쪽: 선수 카드 (아바타 · 소속 · 상태 게이지 · 계약) */
-export function PlayerPanel({ game, onOpen }: { game: GameState; onOpen: (modal: 'player' | 'records') => void }) {
+export function PlayerPanel({ game, onOpen }: { game: GameState; onOpen: (modal: 'player' | 'records' | 'turn') => void }) {
   const retire = useGameStore((s) => s.retire);
   const reset = useGameStore((s) => s.reset);
   const { player } = game;
@@ -34,8 +33,7 @@ export function PlayerPanel({ game, onOpen }: { game: GameState; onOpen: (modal:
             <Tag tone="emerald">OVR {player.ovr}</Tag>
           </div>
           <p className="truncate text-[11px] text-zinc-400">
-            {BASE_WORLD.nations[player.profile.nationality]?.nameKo} · {player.age}세 · {player.profile.role.position}{' '}
-            {PLAYSTYLE_DEFINITIONS[player.profile.role.playStyle].label}
+            {BASE_WORLD.nations[player.profile.nationality]?.nameKo} · {player.age}세 · {player.profile.role.position}
           </p>
           <p className="mt-1 truncate text-sm font-semibold text-zinc-50">{club ? club.nameKo : 'FA (무소속)'}</p>
           <p className="truncate text-[11px] text-zinc-400">
@@ -55,6 +53,7 @@ export function PlayerPanel({ game, onOpen }: { game: GameState; onOpen: (modal:
         <Meter label="멘탈" value={player.mental} />
         <Meter label="명성" value={player.reputation} />
         <Meter label="입지" value={player.squad.standing} />
+        <div className="col-span-2"><Meter label={`약발 숙련도 · 주발 ${player.profile.dominantFoot === 'LEFT' ? '왼발' : '오른발'}`} value={player.weakFoot ?? 40} /></div>
       </div>
 
       <dl className="grid grid-cols-2 gap-2 text-[11px]">
@@ -84,6 +83,7 @@ export function PlayerPanel({ game, onOpen }: { game: GameState; onOpen: (modal:
       ) : null}
 
       <div className="mt-auto flex flex-col gap-2 pt-1">
+        {game.lastTurn ? <Button variant="primary" onClick={() => onOpen('turn')}>이번 턴 결과 보기</Button> : null}
         <div className="grid grid-cols-2 gap-1">
           <Button onClick={() => onOpen('player')}>선수 정보</Button>
           <Button onClick={() => onOpen('records')}>기록실</Button>

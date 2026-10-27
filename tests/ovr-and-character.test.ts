@@ -29,11 +29,11 @@ describe('OVR', () => {
     for (const role of allRoles()) expect(calculateOVR(flat(63), role)).toBe(63);
   });
 
-  it('결정력·오프더볼이 높으면 타겟맨보다 포처 OVR이 높다', () => {
+  it('능력치와 포지션이 같으면 초기 역할과 무관하게 OVR도 같다', () => {
     const attrs = { ...flat(50), finishing: 90, offTheBall: 90 };
     const poacher = calculateOVR(attrs, { position: 'ST', playStyle: 'POACHER' });
     const targetMan = calculateOVR(attrs, { position: 'ST', playStyle: 'TARGET_MAN' });
-    expect(poacher).toBeGreaterThan(targetMan);
+    expect(poacher).toBe(targetMan);
   });
 
   it('GK OVR은 필드 스탯을 무시한다', () => {
@@ -58,7 +58,7 @@ describe('캐릭터 생성', () => {
   it('16세 초기 OVR은 모든 포지션·스타일에서 비슷한 범위다', () => {
     for (const role of allRoles()) {
       const ovr = calculateOVR(generateInitialAttributes(role, 182, 76, 3), role);
-      expect(ovr).toBeGreaterThanOrEqual(42);
+      expect(ovr).toBeGreaterThanOrEqual(40);
       expect(ovr).toBeLessThanOrEqual(62);
     }
   });

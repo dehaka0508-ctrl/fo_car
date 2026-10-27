@@ -18,6 +18,8 @@ import { acceptOffer, offerAttractiveness, rejectOffer, requestMove, requestRene
 function effectValue(state: GameState, effect: EventEffect): number {
   const { player } = state;
   switch (effect.kind) {
+    case 'POSITION':
+      return 5;
     case 'MENTAL':
       return effect.delta * (player.mental < 70 ? 0.6 : 0.2);
     case 'CONDITION':
@@ -51,6 +53,7 @@ export function autoAnswerEvents(state: GameState): GameState {
   for (const event of state.events.filter((e) => !e.resolution)) {
     const def = GAME_EVENT_MAP[event.definitionId];
     const choices = def.choices.filter((c) => isChoiceAffordable(c, next));
+    if (event.definitionId === 'position-change-offer') { next = resolveEvent(next, event.instanceId, 'accept'); continue; }
     const best = choices.reduce((a, b) => (choiceValue(next, b) > choiceValue(next, a) ? b : a), choices[0] ?? def.choices[0]);
     next = resolveEvent(next, event.instanceId, best.id);
   }

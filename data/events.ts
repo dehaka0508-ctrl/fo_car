@@ -12,6 +12,15 @@ const ALL: TurnPhase[] = ['FIRST_HALF', 'SECOND_HALF', 'PRESEASON'];
 const SEASON: TurnPhase[] = ['FIRST_HALF', 'PRESEASON'];
 
 export const GAME_EVENTS: GameEventDefinition[] = [
+  {
+    id: 'position-change-offer', category: 'TEAM', title: '새 포지션 제의',
+    body: '코치가 {name}의 능력치를 분석했습니다. 현재 {currentPosition}보다 {targetPositionLabel}에서 더 좋은 활약이 기대됩니다. 포지션을 바꿔 볼까요?',
+    phases: ALL, weight: 0,
+    choices: [
+      { id: 'accept', label: '새 포지션에 도전한다', description: '능력치는 그대로 유지하고, 제안받은 포지션으로 변경합니다.', effects: [] },
+      { id: 'decline', label: '현재 포지션을 유지한다', effects: [] },
+    ],
+  },
   // ----- 프리시즌 휴가 계획 (필수) -----
   {
     id: 'vacation-plan',

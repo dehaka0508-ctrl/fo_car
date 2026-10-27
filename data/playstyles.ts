@@ -397,3 +397,28 @@ export function getPlayStyle(id: PlayStyle): PlayStyleDefinition {
 export function getPositionGroup(position: Position): PositionGroup {
   return POSITION_META[position].group;
 }
+
+/** 생성 이후에는 초기 세부 역할과 무관한 포지션 공통 프로필을 사용한다. */
+const POSITION_PROFILES = new Map<Position, PlayStyleDefinition>();
+export function getPositionProfile(position: Position): PlayStyleDefinition {
+  const cached = POSITION_PROFILES.get(position);
+  if (cached) return cached;
+  const styles = Object.values(PLAYSTYLE_DEFINITIONS).filter((style) => style.positions.includes(position));
+  const average = (key: 'staminaDrain' | 'goalShare' | 'assistShare') => styles.reduce((sum, style) => sum + style[key], 0) / styles.length;
+  const weights = (key: 'ovrWeights' | 'scoringProfile' | 'creatingProfile' | 'involvementProfile'): AttributeWeights => {
+    const result: AttributeWeights = {};
+    for (const style of styles) {
+      const total = Object.values(style[key]).reduce((sum, value) => sum + (value ?? 0), 0);
+      for (const [attribute, value] of Object.entries(style[key]) as Array<[AttributeKey, number]>) {
+        result[attribute] = (result[attribute] ?? 0) + value / (total || 1) / styles.length;
+      }
+    }
+    return result;
+  };
+  const profile = { ...styles[0], label: POSITION_META[position].label, positions: [position],
+    staminaDrain: average('staminaDrain'), goalShare: average('goalShare'), assistShare: average('assistShare'),
+    ovrWeights: weights('ovrWeights'), scoringProfile: weights('scoringProfile'),
+    creatingProfile: weights('creatingProfile'), involvementProfile: weights('involvementProfile') };
+  POSITION_PROFILES.set(position, profile);
+  return profile;
+}

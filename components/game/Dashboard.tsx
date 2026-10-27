@@ -15,6 +15,7 @@ import { TransferStep } from './steps/TransferStep';
 import { RecordsTab } from './tabs/RecordsTab';
 import { PlayerTab } from './tabs/PlayerTab';
 import { MobileDashboard } from './MobileDashboard';
+import { TurnSummary } from './TurnSummary';
 import { TurnResultPanel } from './TurnResultPanel';
 import { Button, cx, Modal, Tag } from './ui';
 import { useIsDesktop } from './useIsDesktop';
@@ -35,7 +36,7 @@ const STEP_BODY: Record<FlowStep, (game: GameState) => ReactNode> = {
   TRANSFER: (game) => <TransferStep game={game} />,
 };
 
-export type DashboardModal = null | 'player' | 'records';
+export type DashboardModal = null | 'player' | 'records' | 'turn';
 
 /** 은퇴 · 세이브 삭제 (휴대폰에서는 선수 정보 창 아래에만 있다) */
 function CareerMenu({ game, onDone }: { game: GameState; onDone: () => void }) {
@@ -75,9 +76,17 @@ function CareerMenu({ game, onDone }: { game: GameState; onDone: () => void }) {
 export function Dashboard({ game }: { game: GameState }) {
   const desktop = useIsDesktop();
   const [modal, setModal] = useState<DashboardModal>(null);
+  const showTurnReport = useGameStore((s) => s.showTurnReport);
+  const dismissTurnReport = useGameStore((s) => s.dismissTurnReport);
   return (
     <>
       {desktop ? <DesktopDashboard game={game} onOpen={setModal} /> : <MobileDashboard game={game} onOpen={setModal} />}
+      {(showTurnReport || modal === 'turn') && game.lastTurn ? (
+        <Modal wide title="이번 턴 결과" onClose={() => { dismissTurnReport(); setModal(null); }}>
+          <TurnSummary game={game} />
+          <div className="mt-5 flex justify-end"><Button variant="primary" onClick={() => { dismissTurnReport(); setModal(null); }}>확인하고 계속하기 →</Button></div>
+        </Modal>
+      ) : null}
       {modal === 'player' ? (
         <Modal wide title="선수 정보" onClose={() => setModal(null)}>
           <PlayerTab game={game} />

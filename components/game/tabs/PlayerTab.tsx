@@ -2,9 +2,9 @@
 
 import { ATTRIBUTE_GROUP_LABELS, ATTRIBUTE_META } from '@/data/attributes';
 import { SHOP_ITEM_MAP } from '@/data/items';
-import { PLAYSTYLE_DEFINITIONS } from '@/data/playstyles';
+import { POSITION_META } from '@/data/playstyles';
 import { roleWeights } from '@/engine/growth';
-import { rankPlayStyleFit } from '@/engine/ovr';
+import { rankPositionFit } from '@/engine/ovr';
 import { ATTRIBUTE_KEYS, type AttributeGroup, type AttributeKey, type GameState } from '@/types/game';
 import { Card, Stat, Tag } from '../ui';
 
@@ -12,7 +12,7 @@ export function PlayerTab({ game }: { game: GameState }) {
   const { player } = game;
   const isGK = player.profile.role.position === 'GK';
   const weights = roleWeights(player);
-  const fits = rankPlayStyleFit(player.attributes, player.profile.role.position);
+  const fits = rankPositionFit(player.attributes, isGK);
   const groups = new Map<AttributeGroup, AttributeKey[]>();
   for (const key of ATTRIBUTE_KEYS) {
     const group = ATTRIBUTE_META[key].group;
@@ -48,16 +48,16 @@ export function PlayerTab({ game }: { game: GameState }) {
             </div>
           ))}
         </div>
-        <p className="mt-3 text-[11px] text-zinc-500">● 현재 포지션·스타일의 핵심 능력치 (OVR 가중치 상위)</p>
+        <p className="mt-3 text-[11px] text-zinc-500">● 현재 포지션의 핵심 능력치 (OVR 가중치 상위)</p>
       </Card>
 
       <div className="flex flex-col gap-4">
-        <Card title="스타일 적합도">
+        <Card title="포지션 적합도">
           <ul className="flex flex-col gap-1 text-sm">
             {fits.map((fit) => (
-              <li key={fit.playStyle} className="flex justify-between">
-                <span className={fit.playStyle === player.profile.role.playStyle ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300'}>
-                  {PLAYSTYLE_DEFINITIONS[fit.playStyle].label}
+              <li key={fit.position} className="flex justify-between">
+                <span className={fit.position === player.profile.role.position ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300'}>
+                  {POSITION_META[fit.position].label}
                 </span>
                 <span className="tabular-nums">{fit.ovr}</span>
               </li>
@@ -70,6 +70,8 @@ export function PlayerTab({ game }: { game: GameState }) {
             <Stat label="몸무게" value={`${player.weightKg}kg`} />
             <Stat label="체력" value={Math.round(player.condition)} />
             <Stat label="멘탈" value={Math.round(player.mental)} />
+            <Stat label="주발" value={player.profile.dominantFoot === 'LEFT' ? '왼발' : '오른발'} />
+            <Stat label="약발 숙련도" value={player.weakFoot ?? 40} />
           </div>
           {player.growthFocus ? (
             <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">

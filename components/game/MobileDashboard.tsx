@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { PixelBall } from '@/components/pixel/PixelIcons';
 import { PlayerStage } from '@/components/pixel/PlayerStage';
+import { getPositionGroup } from '@/data/playstyles';
 import { TURN_PHASE_LABELS } from '@/data/labels';
 import { BASE_WORLD } from '@/engine/career';
-import { averageRating } from '@/engine/simulator';
+import { averageRating, passAccuracy } from '@/engine/simulator';
 import { turnLabel } from '@/engine/state';
 import { useGameStore } from '@/store/gameStore';
 import { FLOW_LABELS, FLOW_STEPS, stepStatus } from '@/store/flow';
@@ -36,7 +37,7 @@ export function MobileDashboard({ game, onOpen }: { game: GameState; onOpen: (mo
       </header>
 
       <PlayerStrip game={game} onOpen={onOpen} />
-      <TurnStrip game={game} open={view === 'result'} onToggle={() => setView((v) => (v === 'result' ? 'step' : 'result'))} />
+      <TurnStrip game={game} open={false} onToggle={() => onOpen('turn')} />
 
       <nav aria-label="턴 진행 단계">
         <ol className="step-nav grid grid-cols-5 gap-1">
@@ -88,6 +89,7 @@ function PlayerStrip({ game, onOpen }: { game: GameState; onOpen: (modal: Dashbo
     ['멘탈', player.mental],
     ['명성', player.reputation],
     ['입지', player.squad.standing],
+    ['약발', player.weakFoot ?? 40],
   ];
   return (
     <section className="px-panel flex gap-3 p-3">
@@ -138,11 +140,14 @@ function TurnStrip({ game, open, onToggle }: { game: GameState; open: boolean; o
   const { line, label } = turnHeadline(turn);
   const rating = averageRating(line);
   const position = turn.leagueTable.find((r) => r.clubId === turn.clubId)?.position;
-  const isGK = game.player.profile.role.position === 'GK';
+  const group = getPositionGroup(turn.playerPosition ?? game.player.profile.role.position);
+  const isGK = group === 'GOALKEEPER';
+  const defender = group === 'DEFENDER';
+  const midfielder = group === 'MIDFIELDER';
   const cells: Array<[string, string | number, string?]> = [
     ['경기', line.appearances],
-    [isGK ? 'CS' : '골', isGK ? line.cleanSheets : line.goals, 'text-amber-300'],
-    ['도움', line.assists, 'text-emerald-300'],
+    [isGK ? '선방' : defender ? '태클' : midfielder ? '패스' : '골', isGK ? line.saves : defender ? line.tackles ?? 0 : midfielder ? (passAccuracy(line) === null ? '-' : `${passAccuracy(line)!.toFixed(0)}%`) : line.goals, 'text-amber-300'],
+    [isGK || defender ? 'CS' : midfielder ? '키패스' : '도움', isGK || defender ? line.cleanSheets : midfielder ? line.keyPasses : line.assists, 'text-emerald-300'],
     ['평점', ratingText(rating), rating !== null && rating >= 7 ? 'text-amber-300' : 'text-zinc-50'],
     ['순위', position ?? '-'],
   ];

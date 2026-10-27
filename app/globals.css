@@ -55,7 +55,7 @@ input[type="range"] { min-height: 32px; width: 100%; }
   .player-stage-award { background: radial-gradient(ellipse at 50% 0%, #fcd34d26, transparent 75%), #211d2b; }
   .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: #53d5a414; border: 1px solid #53d5a433; }
   .eyebrow { color: #78e2ba; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; }
-  .creation-shell { max-width: 1120px; margin: auto; padding: 28px 24px 48px; width: 100%; }
+  .creation-shell { max-width: 1120px; margin: 0 auto; padding: 28px 24px 48px; width: 100%; }
   .creation-intro { padding: 44px 0 28px; max-width: 680px; }
   .creation-intro h1 { margin: 12px 0; font-size: clamp(28px, 4vw, 40px); font-weight: 750; line-height: 1.25; }
   .creation-intro p:last-child { color: #96a5b7; font-size: 14px; line-height: 1.9; }
@@ -92,4 +92,19 @@ input[type="range"] { min-height: 32px; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+
+/* An original coach-led introduction, with the rhythm of a handheld RPG. */
+.coach-step { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 2px solid #263344; color: #7b8b9e; font-size: 12px; }
+.coach-step.active { border-color: #53d5a4; color: #78e2ba; background: #53d5a407; }
+.coach-scene { position: relative; display: flex; justify-content: center; align-items: end; height: 230px; overflow: hidden; background: radial-gradient(ellipse at 50% 0%, #53d5a41a, transparent 75%), linear-gradient(#132733 0 62%, #183b34 62% 100%); }
+.coach-field-line { position: absolute; width: 500px; height: 160px; bottom: -100px; border: 2px solid #78e2ba22; border-radius: 50%; }
+.coach-character { position: relative; z-index: 1; margin-bottom: 18px; filter: drop-shadow(0 8px 12px #0005); }
+.coach-scene-caption { position: absolute; bottom: 12px; left: 20px; color: #a6f0d350; font-size: 9px; letter-spacing: 0.15em; }
+.coach-dialogue { min-height: 152px; padding: 20px 24px; background: #111c2a; border-top: 1px solid #53d5a433; }
+@media (max-width: 639px) {
+  .coach-step { flex-direction: column; align-items: start; gap: 3px; padding: 8px 4px; font-size: 11px; }
+  .coach-scene { height: 190px; }
+  .coach-dialogue { padding: 20px; }
+  .coach-setup .creation-preview { position: static; }
 }

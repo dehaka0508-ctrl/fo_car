@@ -14,6 +14,7 @@ const KIND_LABELS: Record<PlanKind, { label: string; hint: string }> = {
   CATEGORY: { label: '영역', hint: '큰 영역 1개(세부 3개)를 고르게 조금씩 올립니다.' },
   BULK_UP: { label: '벌크업', hint: '몸무게↑ 몸싸움·제공권↑ / 가속력·민첩성↓' },
   CUT: { label: '감량', hint: '몸무게↓ 가속력·민첩성↑ / 몸싸움·제공권↓' },
+  WEAK_FOOT: { label: '약발', hint: '약발 숙련도 +3 · 체력 -8' },
   REST: { label: '휴식', hint: '체력을 회복하고 멘탈을 다잡습니다.' },
 };
 
@@ -62,6 +63,7 @@ export function TrainingStep({ game }: { game: GameState }) {
               {ATTRIBUTE_META[key as AttributeKey].label} {signed(delta ?? 0)}
             </Tag>
           ))}
+          {done.weakFootDelta !== undefined ? <Tag tone="emerald">약발 +{done.weakFootDelta}</Tag> : null}
           <Tag tone={done.conditionDelta >= 0 ? 'emerald' : 'amber'}>체력 {signed(done.conditionDelta)}</Tag>
         </div>
       </div>
@@ -69,7 +71,7 @@ export function TrainingStep({ game }: { game: GameState }) {
   }
 
   const plan: TrainingPlan =
-    kind === 'REST' ? { kind } : kind === 'CATEGORY' ? { kind, category, intensity } : kind === 'FOCUSED' ? { kind, attributes: focused, intensity } : { kind, intensity };
+    kind === 'REST' || kind === 'WEAK_FOOT' ? { kind } : kind === 'CATEGORY' ? { kind, category, intensity } : kind === 'FOCUSED' ? { kind, attributes: focused, intensity } : { kind, intensity };
   const invalid = validateTrainingPlan(plan);
   const preview = invalid ? null : previewTraining(player, plan);
   const groups: Array<[AttributeGroup, readonly AttributeKey[]]> = [
@@ -129,7 +131,7 @@ export function TrainingStep({ game }: { game: GameState }) {
         </div>
       ) : null}
 
-      {kind !== 'REST' ? (
+      {kind !== 'REST' && kind !== 'WEAK_FOOT' ? (
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-zinc-400">강도</span>
           <Segment value={intensity} onChange={setIntensity} options={(Object.keys(INTENSITY_LABELS) as TrainingIntensity[]).map((i) => [i, INTENSITY_LABELS[i]])} />
@@ -140,6 +142,7 @@ export function TrainingStep({ game }: { game: GameState }) {
         <span className="mr-1 text-zinc-400">예상</span>
         {preview ? (
           <>
+            {preview.weakFootDelta !== undefined ? <Tag tone="emerald">약발 +{preview.weakFootDelta}</Tag> : null}
             {Object.entries(preview.gains).map(([key, gain]) => (
               <Tag key={key} tone={(gain ?? 0) >= 0 ? 'emerald' : 'rose'}>
                 {ATTRIBUTE_META[key as AttributeKey].label} {signed(gain ?? 0, 1)}

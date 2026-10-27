@@ -1,9 +1,10 @@
 'use client';
 
 import { PlayerToken } from '@/components/Avatar';
+import { getPositionGroup } from '@/data/playstyles';
 import { HIGHLIGHT_KIND_LABELS, TURN_PHASE_LABELS } from '@/data/labels';
 import { BASE_WORLD } from '@/engine/career';
-import { averageRating, mergeStatLines } from '@/engine/simulator';
+import { averageRating, mergeStatLines, passAccuracy } from '@/engine/simulator';
 import { turnLabel } from '@/engine/state';
 import { kitColorsFor } from '@/engine/world';
 import type { CompetitionType, GameState, NoticeKind, PlayerStatLine, SeasonRecord, TeamRecord, TurnResult } from '@/types/game';
@@ -40,12 +41,12 @@ export function turnHeadline(turn: TurnResult): { label: string; line: PlayerSta
   const others = candidates
     .filter((c) => c !== best && c.line.appearances > 0)
     .map((c) => `${c.label} ${c.line.appearances}경기 ${c.line.goals}골 ${c.line.assists}도움`);
-  return { ...best, others };
+  return { ...best, label: '전체 대회', line: mergeStatLines(...Object.values(turn.playerStats)), team: sumTeam(Object.values(turn.teamStats)), others };
 }
 
 function seasonHeadline(record: SeasonRecord): PlayerStatLine {
   const club = mergeStatLines(...CLUB_TYPES.map((t) => record.stats[t]));
-  return club.appearances > 0 ? club : record.stats.RESERVE;
+  return mergeStatLines(club, record.stats.RESERVE, record.stats.INTERNATIONAL, record.stats.FRIENDLY);
 }
 
 function ratingTone(rating: number | null): string {
@@ -123,6 +124,9 @@ function LastTurn({ turn, game, isGK }: { turn: TurnResult; game: GameState; isG
   const previous = game.seasonTurns.length >= 2 ? game.seasonTurns[game.seasonTurns.length - 2] : null;
   const prevPosition = previous && previous.leagueId === turn.leagueId ? previous.leagueTable.find((r) => r.clubId === previous.clubId)?.position : undefined;
   const moved = position !== null && prevPosition !== undefined ? prevPosition - position : 0;
+  const group = getPositionGroup(turn.playerPosition ?? game.player.profile.role.position);
+  const defender = group === 'DEFENDER';
+  const midfielder = group === 'MIDFIELDER';
   const h = turn.highlight;
   const [us, them] = h ? (h.playerTeamSide === 'HOME' ? [h.score.home, h.score.away] : [h.score.away, h.score.home]) : [0, 0];
   const result = h ? (h.score.winner === h.playerTeamSide ? '승' : h.score.winner === 'DRAW' ? '무' : '패') : null;
@@ -138,13 +142,14 @@ function LastTurn({ turn, game, isGK }: { turn: TurnResult; game: GameState; isG
       <div className="grid grid-cols-4">
         <Tile label="출전" value={line.appearances} sub={team ? `팀 ${team.played}경기` : undefined} />
         {isGK ? (
-          <Tile label="클린시트" value={line.cleanSheets} tone="text-sky-300" sub={`선방 ${line.saves}`} />
-        ) : (
+          <Tile label="선방" value={line.saves} tone="text-sky-300" />
+        ) : defender ? <Tile label="성공 태클" value={line.tackles ?? 0} tone="text-sky-300" /> : (
           <Tile label="골" value={line.goals} tone="text-amber-300" sub={line.appearances ? `경기당 ${(line.goals / line.appearances).toFixed(2)}` : undefined} />
         )}
-        <Tile label="도움" value={line.assists} tone="text-emerald-300" sub={`키패스 ${line.keyPasses}`} />
+        {isGK || defender ? <Tile label="클린시트" value={line.cleanSheets} tone="text-emerald-300" /> : <Tile label="도움" value={line.assists} tone="text-emerald-300" sub={`키패스 ${line.keyPasses}`} />}
         <Tile label="평점" value={ratingText(rating)} tone={ratingTone(rating)} />
       </div>
+      {midfielder ? <div className="grid grid-cols-2 gap-2"><Tile label="패스 성공률" value={passAccuracy(line) === null ? '-' : `${passAccuracy(line)!.toFixed(1)}%`} sub={`${line.passesCompleted ?? 0}/${line.passesAttempted ?? 0}`} /><Tile label="키패스" value={line.keyPasses} /></div> : null}
       <p className="text-xs text-zinc-200">
         {team ? (
           <>

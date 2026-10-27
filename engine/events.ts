@@ -14,7 +14,9 @@ import type {
   GameState,
   TurnPhase,
 } from '@/types/game';
-import { calculateOVR } from './ovr';
+import { POSITION_META } from '@/data/playstyles';
+import { PLAYSTYLES_BY_POSITION, POSITIONS, type Position } from '@/types/game';
+import { calculateOVR, rankPositionFit } from './ovr';
 import { clamp, hashSeed, rngFor, type Rng } from './rng';
 import { formatMoney } from './state';
 import { clubName, type SimulationWorld } from './world';
@@ -59,7 +61,7 @@ export function rollEvents(
   completedPhase: TurnPhase,
   rng: Rng,
 ): ActiveEvent[] {
-  const available = GAME_EVENTS.filter((def) => isEventAvailable(def, state, completedPhase));
+  const available = GAME_EVENTS.filter((def) => def.id !== 'position-change-offer' && isEventAvailable(def, state, completedPhase));
   const guaranteed = available.filter((def) => def.guaranteed);
   const pool = available.filter((def) => !def.guaranteed);
   const picked: GameEventDefinition[] = [...guaranteed];
@@ -70,11 +72,17 @@ export function rollEvents(
     picked.push(pool.splice(index, 1)[0]);
   }
 
+  const proposal = positionChangeProposal(state);
+  if (proposal) {
+    const index = picked.findIndex((def) => !def.guaranteed);
+    if (index >= 0) picked[index] = GAME_EVENT_MAP['position-change-offer'];
+    else picked.push(GAME_EVENT_MAP['position-change-offer']);
+  }
   const vars = eventVars(state, world);
   return picked.map((def, i) => ({
     instanceId: `ev-${hashSeed(state.seed, state.turn.season, completedPhase, def.id, i)}`,
     definitionId: def.id,
-    vars,
+    vars: def.id === 'position-change-offer' && proposal ? { ...vars, targetPosition: proposal, targetPositionLabel: POSITION_META[proposal].label, currentPosition: POSITION_META[state.player.profile.role.position].label } : vars,
     resolution: null,
   }));
 }
@@ -93,6 +101,10 @@ export function applyEventEffects(state: GameState, effects: readonly EventEffec
 
   for (const effect of effects) {
     switch (effect.kind) {
+      case 'POSITION':
+        player = { ...player, profile: { ...player.profile, role: { position: effect.position, playStyle: PLAYSTYLES_BY_POSITION[effect.position][0] } as typeof player.profile.role } };
+        summary.push(`포지션 변경: ${POSITION_META[effect.position].label}`);
+        break;
       case 'MENTAL':
         player.mental = clamp(player.mental + effect.delta, 0, 100);
         summary.push(`멘탈 ${sign(effect.delta)}`);
@@ -149,7 +161,12 @@ export function resolveEvent(state: GameState, instanceId: string, choiceId: str
   if (!isChoiceAffordable(choice, state)) throw new Error('돈이 부족합니다.');
 
   const success = choice.successChance === undefined || rngFor(state.seed, instanceId, choiceId).chance(choice.successChance);
-  const effects = success ? choice.effects : (choice.failureEffects ?? []);
+  let effects: EventEffect[] = success ? choice.effects : (choice.failureEffects ?? []);
+  if (event.definitionId === 'position-change-offer' && choice.id === 'accept') {
+    const position = event.vars.targetPosition as Position;
+    if (!POSITIONS.includes(position) || position === 'GK' || state.player.profile.role.position === 'GK') throw new Error('유효하지 않은 포지션 제의입니다.');
+    effects = [{ kind: 'POSITION', position }];
+  }
   const applied = applyEventEffects(state, effects);
   const summary = choice.successChance === undefined ? applied.summary : [success ? '성공!' : '실패…', ...applied.summary];
 
@@ -159,4 +176,15 @@ export function resolveEvent(state: GameState, instanceId: string, choiceId: str
       e.instanceId === instanceId ? { ...e, resolution: { choiceId, success, summary } } : e,
     ),
   };
+}
+
+/** 다른 필드 포지션의 적합 OVR이 3 이상 높을 때, 턴마다 25% 확률로 제의한다. */
+export function positionChangeProposal(state: GameState): Position | null {
+  const player = state.player;
+  if (player.profile.role.position === 'GK' || !player.contract) return null;
+  const fits = rankPositionFit(player.attributes);
+  const current = fits.find((fit) => fit.position === player.profile.role.position)!;
+  const best = fits[0];
+  if (best.position === current.position || best.ovr < current.ovr + 3) return null;
+  return rngFor(state.seed, state.turn.season, state.turn.phase, 'position-offer').chance(0.25) ? best.position : null;
 }

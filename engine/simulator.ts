@@ -19,7 +19,7 @@
  *    → resolveHighlight(바둑돌 매치 결과) → advanceTurn → finalizeTurn
  *  세션은 순수 데이터라 그대로 LocalStorage에 저장할 수 있다.
  */
-import { getPlayStyle, getPositionGroup, POSITION_META } from '@/data/playstyles';
+import { getPlayStyle, getPositionProfile, getPositionGroup, POSITION_META } from '@/data/playstyles';
 import type {
   Appearance,
   AttributeKey,
@@ -161,6 +161,8 @@ export const SIM_CONFIG = {
     penaltyBiasPerNet: 0.05,
     reputationWeight: {
       DERBY: 1,
+      RIVAL_MATCH: 1,
+      TITLE_DECIDER: 1.5,
       BIG_MATCH: 0.8,
       DOMESTIC_CUP_FINAL: 1.5,
       CONTINENTAL_FINAL: 2.5,
@@ -270,7 +272,7 @@ export function conditionDrain(params: {
   competitionType: CompetitionType;
 }): number {
   const c = SIM_CONFIG.condition;
-  const positionFactor = POSITION_META[params.position].baseStaminaDrain * getPlayStyle(params.playStyle).staminaDrain;
+  const positionFactor = POSITION_META[params.position].baseStaminaDrain * getPositionProfile(params.position).staminaDrain;
   const staminaFactor = c.staminaDrainBase - c.staminaDrainSlope * (params.stamina / 100);
   const intensity = params.competitionType === 'INTERNATIONAL' ? c.internationalIntensity : params.leagueIntensity;
   return (
@@ -387,12 +389,12 @@ function mentalPerformance(mental: number): number {
  * = 스타일 기본값 × e^((득점 능력 − 팀 수준)/15) × 멘탈 보정
  * 득점 능력은 스타일별 scoringProfile(결정력·오프더볼·제공권 등)의 가중 평균이다.
  */
-export function goalShare(attributes: Attributes, playStyle: PlayStyle, mental: number, teamPower: number): number {
-  const style = getPlayStyle(playStyle);
+export function goalShare(attributes: Attributes, position: Position, mental: number, teamPower: number, weakFoot = 40): number {
+  const style = getPositionProfile(position);
   if (style.goalShare === 0) return 0;
   const composite = weightedScore(attributes, style.scoringProfile);
   return softCap(
-    style.goalShare * shareFactor(composite, teamPower) * mentalPerformance(mental),
+    style.goalShare * shareFactor(composite, teamPower) * mentalPerformance(mental) * weakFootFactor(weakFoot),
     goalShareCap(teamPower),
   );
 }
@@ -405,11 +407,11 @@ export function goalShareCap(teamPower: number): number {
 }
 
 /** 도움 점유율: 도움이 기록되는 골 1개를 이 선수가 도울 확률 (creatingProfile 기반) */
-export function assistShare(attributes: Attributes, playStyle: PlayStyle, mental: number, teamPower: number): number {
-  const style = getPlayStyle(playStyle);
+export function assistShare(attributes: Attributes, position: Position, mental: number, teamPower: number, weakFoot = 40): number {
+  const style = getPositionProfile(position);
   const composite = weightedScore(attributes, style.creatingProfile);
   return softCap(
-    style.assistShare * shareFactor(composite, teamPower) * mentalPerformance(mental),
+    style.assistShare * shareFactor(composite, teamPower) * mentalPerformance(mental) * weakFootFactor(weakFoot),
     SIM_CONFIG.individual.maxAssistShare,
   );
 }
@@ -461,7 +463,7 @@ export interface RatingInput {
  */
 export function calculateMatchRating(input: RatingInput): number {
   const r = SIM_CONFIG.rating;
-  const style = getPlayStyle(input.role.playStyle);
+  const style = getPositionProfile(input.role.position);
   const involvement = weightedScore(input.attributes, style.involvementProfile);
   const defence = defensiveRole(input.role.position);
 
@@ -577,11 +579,14 @@ export function mergeStatLines(...lines: PlayerStatLine[]): PlayerStatLine {
       assists: acc.assists + line.assists,
       cleanSheets: acc.cleanSheets + line.cleanSheets,
       saves: acc.saves + line.saves,
+      tackles: (acc.tackles ?? 0) + (line.tackles ?? 0),
+      passesAttempted: (acc.passesAttempted ?? 0) + (line.passesAttempted ?? 0),
+      passesCompleted: (acc.passesCompleted ?? 0) + (line.passesCompleted ?? 0),
       // 키패스 도입 전 세이브와 섞여도 NaN이 되지 않게
       keyPasses: acc.keyPasses + (line.keyPasses ?? 0),
       ratingSum: acc.ratingSum + line.ratingSum,
     }),
-    { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, saves: 0, keyPasses: 0, ratingSum: 0 },
+    { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, saves: 0, tackles: 0, passesAttempted: 0, passesCompleted: 0, keyPasses: 0, ratingSum: 0 },
   );
 }
 
@@ -627,6 +632,9 @@ function addPlayerLine(line: PlayerStatLine, match: PlayerMatchLine) {
   line.assists += match.assists;
   line.cleanSheets += match.cleanSheet ? 1 : 0;
   line.saves += match.saves;
+  line.tackles = (line.tackles ?? 0) + (match.tackles ?? 0);
+  line.passesAttempted = (line.passesAttempted ?? 0) + (match.passesAttempted ?? 0);
+  line.passesCompleted = (line.passesCompleted ?? 0) + (match.passesCompleted ?? 0);
   line.keyPasses = (line.keyPasses ?? 0) + match.keyPasses;
   line.ratingSum += match.rating;
 }
@@ -647,6 +655,7 @@ function resultFor(score: MatchScore, side: TeamSide): 'W' | 'D' | 'L' {
 // ============================================================================
 
 interface SessionPlayer {
+  weakFoot?: number;
   name: string;
   appearance: Appearance;
   role: PlayerRole;
@@ -689,6 +698,9 @@ export interface NotableOpponent {
 export interface HighlightTarget {
   fixtureId: ID;
   kind: HighlightKind;
+  /** 턴당 직접 선택 횟수. 이전 세이브는 생략 가능. */
+  situationCount?: number;
+  appearance?: { from: number; to: number };
 }
 
 export interface TurnInput {
@@ -813,6 +825,7 @@ export function createTurnSession(input: TurnInput): TurnSession {
     seed,
     turn,
     player: {
+      weakFoot: player.weakFoot ?? 40,
       name: player.profile.name,
       appearance: player.profile.appearance,
       role: player.profile.role,
@@ -1015,13 +1028,6 @@ function playingTimeFor(s: TurnSession, fixture: Fixture): PlayingTime {
   return s.player.squad.playingTime;
 }
 
-/** 하이라이트 경기는 주인공 출전이 보장된다 (후보는 교체로 30분). */
-function forcedParticipation(playingTime: PlayingTime, fixture: Fixture): Participation {
-  const benchRole = playingTime === 'BACKUP' || (playingTime === 'RESERVE' && fixture.squad === 'FIRST');
-  return benchRole
-    ? { started: false, minutes: 30, onAt: 60, offAt: 90 }
-    : { started: true, minutes: 90, onAt: 0, offAt: 90 };
-}
 
 interface GoalTally {
   playerGoals: number;
@@ -1173,9 +1179,7 @@ function playTeamFixture(s: TurnSession, fixture: Fixture, highlight: { outcome:
   // 2) 출전 판정 (주인공·파트너)
   const selectionRng = rngFor(s.seed, fixture.id, 'selection');
   const participation = eligible
-    ? highlight
-      ? forcedParticipation(playingTime, fixture)
-      : decideParticipation(selectionRng, playingTime, context, s.condition, isGoalkeeper)
+    ? decideParticipation(selectionRng, playingTime, context, s.condition, isGoalkeeper)
     : null;
   const partnerParticipation =
     s.partner && fixture.squad === 'FIRST'
@@ -1204,8 +1208,8 @@ function playTeamFixture(s: TurnSession, fixture: Fixture, highlight: { outcome:
   const playerShares = participation
     ? {
         on: participation,
-        goal: goalShare(attributes, role.playStyle, s.mental, myTeam.power),
-        assist: assistShare(attributes, role.playStyle, s.mental, myTeam.power),
+        goal: goalShare(attributes, role.position, s.mental, myTeam.power, s.player.weakFoot),
+        assist: assistShare(attributes, role.position, s.mental, myTeam.power, s.player.weakFoot),
       }
     : null;
   const partnerShares =
@@ -1302,7 +1306,21 @@ function playTeamFixture(s: TurnSession, fixture: Fixture, highlight: { outcome:
         }),
     );
 
+    // 독립 스트림으로 집계하여 기존 득점·평점 난수 순서를 바꾸지 않는다.
+    const positionGroup = getPositionGroup(role.position);
+    const tackles = isGoalkeeper ? 0 : rngFor(s.seed, fixture.id, 'tackles').poisson(
+      (positionGroup === 'DEFENDER' ? 3.5 : positionGroup === 'MIDFIELDER' ? 1.6 : 0.6) *
+      (attributes.tackling / 70) * (participation.minutes / 90),
+    );
+    const passRng = rngFor(s.seed, fixture.id, 'passes');
+    const passesAttempted = Math.max(keyPasses, passRng.poisson((positionGroup === 'MIDFIELDER' ? 55 : positionGroup === 'DEFENDER' ? 35 : isGoalkeeper ? 20 : 18) * participation.minutes / 90));
+    const passChance = passSuccessChance(attributes, s.player.weakFoot ?? 40);
+    let passesCompleted = 0;
+    for (let i = 0; i < passesAttempted; i++) if (passRng.chance(passChance)) passesCompleted++;
+    passesCompleted = Math.max(passesCompleted, keyPasses);
     line = {
+      passesAttempted, passesCompleted,
+      tackles,
       started: participation.started,
       minutes: participation.minutes,
       goals: playerGoals,
@@ -1370,62 +1388,60 @@ function playTeamFixture(s: TurnSession, fixture: Fixture, highlight: { outcome:
 // 하이라이트 경기 선정
 // ----------------------------------------------------------------------------
 
-/**
- * 턴을 선택지 없이 미리 한 번 돌려 본 뒤 규칙에 맞는 경기를 고른다.
- * 경기마다 독립 시드를 쓰므로 하이라이트 이전까지는 실제 진행과 결과가 같다.
- *  - 전반기: 라이벌 더비 (없으면 가장 강한 상대와의 빅매치)
- *  - 후반기: 대륙컵 결승 > 국내컵 결승 > 후반기 더비 > 빅매치
- *  - 프리시즌: 대표팀이 치른 마지막 국제대회 경기 > 친선경기
- *  - B팀·유스: 리저브 더비 > 리저브 빅매치
- */
-function chooseHighlight(session: TurnSession): HighlightTarget | null {
+/** 현재 결과와 남은 일정으로 수학적으로 확정된 리그 우승팀을 찾는다. */
+function clinchedLeagueChampion(session: TurnSession): ID | null {
+  if (session.turn.phase !== 'SECOND_HALF' || !session.leagueId) return null;
+  const table = computeLeagueTable(session);
+  const leader = table[0];
+  if (!leader) return null;
+  const remaining = (clubId: ID) => session.fixtures.filter((f) =>
+    f.competitionType === 'LEAGUE' && f.competitionId === session.leagueId &&
+    !session.results[f.id] && (f.home.id === clubId || f.away.id === clubId),
+  ).length;
+  // 모든 경기가 끝났다면 기존 순위표의 득실차·다득점 타이브레이커를 따른다.
+  if (table.every((row) => remaining(row.clubId) === 0)) return leader.clubId;
+  return table.slice(1).every((row) => leader.points > row.points + 3 * remaining(row.clubId)) ? leader.clubId : null;
+}
+
+/** 실제 출전한 컵 결승·더비/라이벌전·리그 우승 결정전에만 턴당 0~2회 선택을 배정한다. */
+export function chooseHighlight(session: TurnSession): HighlightTarget | null {
+  const situationCount = rngFor(session.seed, session.turn.season, session.turn.phase, 'highlight-count').int(0, 2);
+  if (situationCount === 0) return null;
   const dry = structuredClone(session);
   dry.highlight = null;
-  runFixtures(dry, false);
-
-  const candidates = dry.logs
-    .map((log) => ({ log, fixture: fixtureById(dry, log.fixtureId) as Fixture }))
-    .filter(({ fixture }) => isEligible(dry, fixture));
-  const opponentPower = ({ log }: { log: MatchLog }) =>
-    log.playerTeamSide === 'HOME' ? log.away.power : log.home.power;
-  const strongest = (list: typeof candidates) =>
-    list.reduce<(typeof candidates)[number] | null>(
-      (best, c) => (!best || opponentPower(c) > opponentPower(best) ? c : best),
-      null,
-    );
-  const target = (c: (typeof candidates)[number] | null | undefined, kind: HighlightKind) =>
-    c ? { fixtureId: c.fixture.id, kind } : null;
-
-  if (session.turn.phase === 'PRESEASON') {
-    const international = candidates.filter((c) => c.fixture.competitionType === 'INTERNATIONAL');
-    if (international.length) return target(international[international.length - 1], 'INTERNATIONAL');
-    return target(
-      strongest(candidates.filter((c) => c.fixture.competitionType === 'FRIENDLY')),
-      'PRESEASON_FRIENDLY',
-    );
+  const titleDeciders = new Set<ID>();
+  while (dry.cursor < dry.fixtures.length) {
+    const fixture = dry.fixtures[dry.cursor];
+    const leagueMatch = fixture.competitionType === 'LEAGUE' && Boolean(fixture.playerTeamSide);
+    const before = leagueMatch ? clinchedLeagueChampion(dry) : null;
+    processFixture(dry, fixture, null);
+    const after = leagueMatch ? clinchedLeagueChampion(dry) : null;
+    if (!before && after && fixture.competitionType === 'LEAGUE' && fixture.playerTeamSide) {
+      const myClub = fixture.playerTeamSide === 'HOME' ? fixture.home.id : fixture.away.id;
+      const opponent = fixture.playerTeamSide === 'HOME' ? fixture.away.id : fixture.home.id;
+      if (after === myClub || after === opponent) titleDeciders.add(fixture.id);
+    }
+    dry.cursor++;
   }
-
-  if (session.player.squad.level !== 'FIRST_TEAM') {
-    const reserve = candidates.filter((c) => c.fixture.competitionType === 'RESERVE');
-    const derby = reserve.find((c) => c.fixture.isDerby);
-    return derby ? target(derby, 'RESERVE_DERBY') : target(strongest(reserve), 'BIG_MATCH');
-  }
-
-  if (session.turn.phase === 'SECOND_HALF') {
-    const finals = candidates.filter((c) => c.fixture.isFinal);
-    const continental = finals.find((c) => c.fixture.competitionType === 'CONTINENTAL');
-    if (continental) return target(continental, 'CONTINENTAL_FINAL');
-    const domestic = finals.find((c) => c.fixture.competitionType === 'DOMESTIC_CUP');
-    if (domestic) return target(domestic, 'DOMESTIC_CUP_FINAL');
-  }
-
-  const league = candidates.filter((c) => c.fixture.competitionType === 'LEAGUE');
-  const derby = league.find((c) => c.fixture.isDerby);
-  if (derby) return target(derby, 'DERBY');
-  return target(
-    strongest(candidates.filter((c) => c.fixture.competitionType === 'LEAGUE' || c.fixture.competitionType === 'CONTINENTAL')),
-    'BIG_MATCH',
-  );
+  const candidates = dry.logs.flatMap((log) => {
+    const fixture = fixtureById(dry, log.fixtureId);
+    if (!fixture || !log.player || log.player.minutes <= 0) return [];
+    let kind: HighlightKind;
+    if (fixture.isFinal && fixture.competitionType === 'CONTINENTAL') kind = 'CONTINENTAL_FINAL';
+    else if (fixture.isFinal && fixture.competitionType === 'DOMESTIC_CUP') kind = 'DOMESTIC_CUP_FINAL';
+    else if (fixture.isFinal && fixture.competitionType === 'INTERNATIONAL') kind = 'INTERNATIONAL';
+    else if (titleDeciders.has(fixture.id)) kind = 'TITLE_DECIDER';
+    else if (fixture.competitionType === 'FRIENDLY') return [];
+    else if (fixture.isDerby) kind = fixture.squad === 'RESERVE' ? 'RESERVE_DERBY' : 'DERBY';
+    else {
+      const opponentId = log.playerTeamSide === 'HOME' ? fixture.away.id.split('#')[0] : fixture.home.id.split('#')[0];
+      if (!dry.notable.some((npc) => npc.tag === 'RIVAL' && npc.clubId === opponentId)) return [];
+      kind = 'RIVAL_MATCH';
+    }
+    return [{ fixtureId: fixture.id, kind, situationCount, appearance: { from: log.player.started ? 0 : 90 - log.player.minutes, to: log.player.started ? log.player.minutes : 90 } }];
+  });
+  if (!candidates.length) return null;
+  return candidates[rngFor(session.seed, session.turn.season, session.turn.phase, 'highlight-fixture').int(0, candidates.length - 1)];
 }
 
 // ----------------------------------------------------------------------------
@@ -1668,6 +1684,7 @@ export function finalizeTurn(session: TurnSession): TurnResult {
   const moraleDrift = played > 0 ? (wins / played - 0.45) * 8 : 0;
 
   return {
+    playerPosition: s.player.role.position,
     turn: s.turn,
     clubId: s.clubId,
     leagueId: s.leagueId,
@@ -1694,4 +1711,16 @@ function teamPowerForStanding(s: TurnSession): number | null {
   const log = s.logs.find((l) => l.player && l.competitionType !== 'INTERNATIONAL');
   if (!log) return null;
   return log.playerTeamSide === 'HOME' ? log.home.power : log.away.power;
+}
+
+/** 약발 숙련도는 득점·도움 기대값을 완만하게 높인다 (0: 0.9배, 100: 1.1배). */
+export function weakFootFactor(value = 40): number { return 0.9 + clamp(value, 0, 100) / 500; }
+
+export function passSuccessChance(attributes: Attributes, weakFoot = 40): number {
+  return clamp(0.45 + attributes.kickAccuracy * 0.0035 + attributes.vision * 0.001 + clamp(weakFoot, 0, 100) * 0.0006, 0.45, 0.98);
+}
+
+/** 누적 성공률은 경기별 백분율의 평균이 아니라 전체 성공/시도 횟수로 구한다. */
+export function passAccuracy(line: Pick<PlayerStatLine, 'passesAttempted' | 'passesCompleted'>): number | null {
+  return (line.passesAttempted ?? 0) > 0 ? (line.passesCompleted ?? 0) / line.passesAttempted! * 100 : null;
 }

@@ -17,6 +17,7 @@ import {
   syncWithDatabase,
   worldOf,
 } from '@/engine/career';
+import { calculateOVR } from '@/engine/ovr';
 import { rollPotential, type CharacterInput } from '@/engine/character';
 import { resolveEvent } from '@/engine/events';
 import { buildAutoHighlightOutcome, buildHighlightScene, resolveSituationChoice } from '@/engine/highlight';
@@ -49,6 +50,8 @@ export const SAVE_VERSION = 2;
 
 interface GameStore {
   game: GameState | null;
+  showTurnReport: boolean;
+  dismissTurnReport: () => void;
   /** 진행 중인 턴 (하이라이트 대기) */
   session: TurnSession | null;
   /** 바둑돌 매치에서 지금까지 판정된 선택 */
@@ -108,11 +111,13 @@ export const useGameStore = create<GameStore>()(
         if (!game) return;
         // 턴이 끝난 뒤에는 구단 DB 변경도 반영한다 (진행 중인 턴에는 손대지 않는다)
         const next = syncWithDatabase(completeTurn(game, session));
-        set({ game: next, session: null, highlightPicks: [], step: nextStep(next, 'MATCH'), flash: null });
+        set({ game: next, showTurnReport: true, session: null, highlightPicks: [], step: nextStep(next, 'MATCH'), flash: null });
       };
 
       return {
         game: null,
+        showTurnReport: false,
+        dismissTurnReport: () => set({ showTurnReport: false }),
         session: null,
         highlightPicks: [],
         ackedPopups: [],
@@ -124,7 +129,7 @@ export const useGameStore = create<GameStore>()(
           run(() => {
             const game = createCareer(input, { seed: seed ?? Math.floor(Math.random() * 1_000_000_000) });
             // 첫 경기 전에도 훈련·상점부터 (답할 사건은 아직 없다)
-            return { game, session: null, highlightPicks: [], ackedPopups: game.notices.map((n) => n.id), message: null, step: nextStep(game, 'MATCH'), flash: null };
+            return { game, showTurnReport: false, session: null, highlightPicks: [], ackedPopups: game.notices.map((n) => n.id), message: null, step: nextStep(game, 'MATCH'), flash: null };
           }),
 
         playTurn: () =>
@@ -169,6 +174,7 @@ export const useGameStore = create<GameStore>()(
             const game = trainInterTurn(get().game!, plan);
             const result = game.interTurn.training!;
             const lines = [
+              ...(result.weakFootDelta !== undefined ? [`약발 숙련도 +${result.weakFootDelta}`] : []),
               ...Object.entries(result.deltas).map(([key, delta]) => `${ATTRIBUTE_META[key as AttributeKey].label} ${signedText(delta ?? 0)}`),
               `체력 ${signedText(result.conditionDelta)}`,
               ...(result.weightDelta ? [`몸무게 ${signedText(result.weightDelta, 1)}kg`] : []),
@@ -231,11 +237,11 @@ export const useGameStore = create<GameStore>()(
             let game = get().game;
             if (!game) return;
             for (let i = 0; i < turns && game.stage === 'READY'; i++) game = autoAdvance(game);
-            return { game, message: null, step: nextStep(game, 'MATCH'), flash: null };
+            return { game, showTurnReport: true, message: null, step: nextStep(game, 'MATCH'), flash: null };
           }),
 
         clearMessage: () => set({ message: null }),
-        reset: () => set({ game: null, session: null, highlightPicks: [], ackedPopups: [], message: null, step: 'MATCH', flash: null }),
+        reset: () => set({ game: null, showTurnReport: false, session: null, highlightPicks: [], ackedPopups: [], message: null, step: 'MATCH', flash: null }),
         goStep: (step) => set({ step, flash: null }),
         skipStep: () => {
           const { game, step } = get();
@@ -255,7 +261,8 @@ export const useGameStore = create<GameStore>()(
         const saved = (persisted ?? {}) as Partial<GameStore>;
         let loaded = saved.game ?? null;
         // 포텐셜 도입 전 세이브: 시드로 숨은 포텐셜을 정한다
-        if (loaded && loaded.player.potential === undefined) loaded = { ...loaded, player: { ...loaded.player, potential: rollPotential(loaded.seed) } };
+        if (loaded && loaded.player.potential === undefined) loaded = { ...loaded, player: { ...loaded.player, potential: rollPotential(loaded.seed, loaded.player.profile.role.position) } };
+        if (loaded) loaded = { ...loaded, player: { ...loaded.player, weakFoot: loaded.player.weakFoot ?? 40, profile: { ...loaded.player.profile, dominantFoot: loaded.player.profile.dominantFoot ?? 'RIGHT' }, ovr: calculateOVR(loaded.player.attributes, loaded.player.profile.role) } };
         const game = loaded && !saved.session && loaded.stage === 'READY' ? syncWithDatabase(loaded) : loaded;
         // 단계 정보가 없는 예전 세이브는 할 일이 남은 첫 단계부터
         const step = saved.step ?? (game ? nextStep(game, 'MATCH') : 'MATCH');

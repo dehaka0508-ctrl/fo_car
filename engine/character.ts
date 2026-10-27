@@ -148,7 +148,7 @@ export function determineInitialSquadStatus(
 }
 
 export function emptyStatLine(): PlayerStatLine {
-  return { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, saves: 0, keyPasses: 0, ratingSum: 0 };
+  return { appearances: 0, starts: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, saves: 0, tackles: 0, passesAttempted: 0, passesCompleted: 0, keyPasses: 0, ratingSum: 0 };
 }
 
 export function emptyStatsByCompetition(): Record<CompetitionType, PlayerStatLine> {
@@ -159,6 +159,7 @@ export function emptyStatsByCompetition(): Record<CompetitionType, PlayerStatLin
 }
 
 export interface CharacterInput {
+  dominantFoot?: 'LEFT' | 'RIGHT';
   name: string;
   nationality: NationCode;
   role: PlayerRole;
@@ -168,26 +169,22 @@ export interface CharacterInput {
   clubId: ID;
 }
 
-/**
- * 숨은 포텐셜(최대 OVR) 분포: 볼츠만 분포 — 80이 가장 흔하고 100으로 갈수록 지수적으로 드물다.
- *   P(포텐셜 = 80 + k) ∝ e^(−k / temperature),  k = 0 … 20
- * temperature 5: 80 ≈ 18% · 90+ ≈ 12% · 95+ ≈ 3.5% · 100 ≈ 0.3% · 평균 ≈ 84.5
- */
-export const POTENTIAL_CONFIG = { min: 80, max: 100, temperature: 5 } as const;
+/** 필드 선수는 18개 능력치 평균 기준 60~100, GK는 기존 OVR 기준 80~100. */
+export const POTENTIAL_CONFIG = { min: 60, max: 100, temperature: 5 } as const;
+export const GK_POTENTIAL_CONFIG = { min: 80, max: 100, temperature: 5 } as const;
 
-/** 포텐셜 값별 확률 (합 1) */
-export function potentialDistribution(): Array<{ potential: number; probability: number }> {
-  const { min, max, temperature } = POTENTIAL_CONFIG;
+/** 낮은 포텐셜일수록 흔한 기존 볼츠만 분포를 유지한다. */
+export function potentialDistribution(position: PlayerRole['position'] = 'ST'): Array<{ potential: number; probability: number }> {
+  const { min, max, temperature } = position === 'GK' ? GK_POTENTIAL_CONFIG : POTENTIAL_CONFIG;
   const weights = Array.from({ length: max - min + 1 }, (_, k) => Math.exp(-k / temperature));
   const total = weights.reduce((a, w) => a + w, 0);
   return weights.map((w, k) => ({ potential: min + k, probability: w / total }));
 }
 
-/** 숨은 포텐셜을 뽑는다 (볼츠만 분포). 다른 초기값의 난수 흐름과 섞이지 않도록 별도 스트림 */
-export function rollPotential(seed: number): number {
-  const { min, max, temperature } = POTENTIAL_CONFIG;
-  const weights = Array.from({ length: max - min + 1 }, (_, k) => Math.exp(-k / temperature));
-  return min + rngFor(seed, 'potential').weightedIndex(weights);
+/** 독립 난수 스트림으로 뽑아 기존 초기 능력치와 GK 시드를 보존한다. */
+export function rollPotential(seed: number, position: PlayerRole['position'] = 'ST'): number {
+  const distribution = potentialDistribution(position);
+  return distribution[rngFor(seed, 'potential').weightedIndex(distribution.map((d) => d.probability))].potential;
 }
 
 export function createPlayer(
@@ -208,7 +205,9 @@ export function createPlayer(
       : Math.round(12_000 + clubState.finance * 400);
 
   return {
+    weakFoot: 40,
     profile: {
+      dominantFoot: input.dominantFoot ?? 'RIGHT',
       id: `player-${options.seed}`,
       name: input.name,
       nationality: input.nationality,
@@ -222,7 +221,7 @@ export function createPlayer(
     weightKg,
     attributes,
     ovr,
-    potential: rollPotential(options.seed),
+    potential: rollPotential(options.seed, input.role.position),
     reputation: squad.level === 'FIRST_TEAM' ? 10 : 5,
     condition: 100,
     mental: 60,
