@@ -35,11 +35,15 @@ export function isEventAvailable(def: GameEventDefinition, state: GameState, com
   if (!occurrence && def.cooldownTurns && state.events.some((event) => event.definitionId === def.id)) return false;
   const req = def.requires;
   if (!req) return true;
+  if (req.positions && !req.positions.includes(player.profile.role.position)) return false;
   if (req.partner && !(state.partner && state.partner.status === 'ACTIVE')) return false;
   if (req.rival && !state.rival) return false;
   if (req.firstTeam && player.squad.level !== 'FIRST_TEAM') return false;
   if (req.hasClub && !player.contract) return false;
   if (req.minReputation !== undefined && player.reputation < req.minReputation) return false;
+  if (req.maxReputation !== undefined && player.reputation > req.maxReputation) return false;
+  if (req.minOVR !== undefined && player.ovr < req.minOVR) return false;
+  if (req.maxOVR !== undefined && player.ovr > req.maxOVR) return false;
   if (req.minMoney !== undefined && player.money < req.minMoney) return false;
   return true;
 }
@@ -75,11 +79,14 @@ export function rollEvents(
   const target = Math.max(eventCount(rng), guaranteed.length);
 
   while (picked.length < target && pool.length) {
-    const index = rng.weightedIndex(pool.map((def) => def.weight));
-    picked.push(pool.splice(index, 1)[0]);
+    const different = pool.filter((def) => !picked.some((previous) => previous.category === def.category));
+    const candidates = different.length ? different : pool;
+    const selected = candidates[rng.weightedIndex(candidates.map((def) => def.weight / (1 + (state.eventHistory?.[def.id]?.count ?? 0))))];
+    picked.push(selected);
+    pool.splice(pool.indexOf(selected), 1);
   }
 
-  const proposal = positionChangeProposal(state);
+  const proposal = isEventAvailable(GAME_EVENT_MAP['position-change-offer'], state, completedPhase) ? positionChangeProposal(state) : null;
   if (proposal) {
     const index = picked.findIndex((def) => !def.guaranteed);
     if (index >= 0) picked[index] = GAME_EVENT_MAP['position-change-offer'];

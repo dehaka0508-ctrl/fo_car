@@ -6,12 +6,13 @@
  * 프리시즌 휴가 계획(vacation-plan)은 후반기 종료 후 반드시 발생하며, '휴식'을 고르고
  * 그해 여름 대표팀 차출이 없으면 다음 시즌을 체력 100으로 시작한다 (engine/interTurn.ts).
  */
+import { EXPANDED_EVENTS } from './eventExpansion';
 import type { GameEventDefinition, TurnPhase } from '@/types/game';
 
 const ALL: TurnPhase[] = ['FIRST_HALF', 'SECOND_HALF', 'PRESEASON'];
 const SEASON: TurnPhase[] = ['FIRST_HALF', 'PRESEASON'];
 
-export const GAME_EVENTS: GameEventDefinition[] = [
+const ORIGINAL_EVENTS: GameEventDefinition[] = [
   {
     id: 'position-change-offer', category: 'TEAM', title: '새 포지션 제의',
     body: '코치가 {name}의 능력치를 분석했습니다. 현재 {currentPosition}보다 {targetPositionLabel}에서 더 좋은 활약이 기대됩니다. 포지션을 바꿔 볼까요?',
@@ -435,6 +436,13 @@ export const GAME_EVENTS: GameEventDefinition[] = [
     ],
   },
 ];
+
+/** 반복 가능한 일상도 최소 두 시즌 간격. 단발성 인생 사건은 한 번만 발생한다. */
+export const GAME_EVENTS: GameEventDefinition[] = [...ORIGINAL_EVENTS, ...EXPANDED_EVENTS].map((event) => ({
+  ...event,
+  cooldownTurns: event.guaranteed ? undefined : event.cooldownTurns ?? 6,
+  maxOccurrences: ['family-sibling', 'family-relationship', 'family-wedding'].includes(event.id) ? 1 : event.maxOccurrences,
+}));
 
 export const GAME_EVENT_MAP: Record<string, GameEventDefinition> = Object.fromEntries(
   GAME_EVENTS.map((event) => [event.id, event]),

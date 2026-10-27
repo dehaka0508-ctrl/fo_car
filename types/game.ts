@@ -859,11 +859,15 @@ export interface EventChoice {
 }
 
 export interface EventRequirement {
+  positions?: Position[];
   partner?: boolean;
   rival?: boolean;
   firstTeam?: boolean;
   hasClub?: boolean;
   minReputation?: number;
+  maxReputation?: number;
+  minOVR?: number;
+  maxOVR?: number;
   minMoney?: number;
 }
 
