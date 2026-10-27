@@ -18,7 +18,7 @@ import { turnHeadline, TurnResultPanel } from './TurnResultPanel';
 import { cx, Tag } from './ui';
 
 /**
- * 휴대폰 세로 화면 (9:16 한 화면, 페이지 스크롤 없음)
+ * 휴대폰: 요약을 위에 두고 본문은 자연스럽게 스크롤한다.
  *  위: 선수 한 줄 · 지난 턴 성적 한 줄 · 단계 표시 / 아래: 지금 단계 (또는 성적 자세히)
  */
 export function MobileDashboard({ game, onOpen }: { game: GameState; onOpen: (modal: DashboardModal) => void }) {
@@ -161,7 +161,7 @@ function TurnStrip({ game, open, onToggle }: { game: GameState; open: boolean; o
         {cells.map(([name, value, tone]) => (
           <div key={name} className="flex flex-col items-center leading-tight">
             <span className={cx('font-pixel text-base', tone ?? 'text-zinc-50')}>{value}</span>
-            <span className="text-[9px] text-zinc-500">{name}</span>
+            <span className="text-[11px] text-zinc-400">{name}</span>
           </div>
         ))}
       </div>

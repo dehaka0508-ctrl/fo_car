@@ -3,7 +3,7 @@
 import { ATTRIBUTE_META } from '@/data/attributes';
 import { SHOP_ITEM_MAP } from '@/data/items';
 import { shopOffers } from '@/engine/interTurn';
-import { previewItemEffect, SHOP_CONFIG } from '@/engine/shop';
+import { SHOP_CONFIG } from '@/engine/shop';
 import { formatMoney } from '@/engine/state';
 import { useGameStore } from '@/store/gameStore';
 import type { GameState, ItemCategory } from '@/types/game';
@@ -32,13 +32,12 @@ export function ShopStep({ game }: { game: GameState }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[11px] text-zinc-400">
-        자산 <b className="font-pixel text-amber-300">{formatMoney(player.money)}</b>으로 살 수 있는 물건 중 3개가 진열됩니다 (턴마다 바뀜).
-        물건은 세부 능력치 1개를 올리고, {SHOP_CONFIG.shieldAge}세부터는 다음 시즌 노화 하락을 막아 줍니다.
+        자산 <b className="font-pixel text-amber-300">{formatMoney(player.money)}</b> · 턴당 1개 구매
       </p>
       {items.length ? (
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="flex flex-col gap-3">
           {items.map((item) => {
-            const effect = previewItemEffect(player, item);
+            const maintaining = player.age >= SHOP_CONFIG.shieldAge;
             return (
               <div key={item.id} className="px-inset m-[2px] flex flex-col gap-2 p-3">
                 <div className="flex items-start justify-between gap-1">
@@ -48,11 +47,7 @@ export function ShopStep({ game }: { game: GameState }) {
                 <p className="text-[11px] text-zinc-400">{item.description}</p>
                 <div className="flex flex-wrap gap-1">
                   <Tag tone="sky">{ATTRIBUTE_META[item.attribute].label}</Tag>
-                  {effect.mode === 'BOOST' ? (
-                    <Tag tone={effect.expected >= 0.5 ? 'emerald' : 'zinc'}>예상 +{effect.expected.toFixed(1)}</Tag>
-                  ) : (
-                    <Tag tone="violet">노화 방어 {effect.amount}</Tag>
-                  )}
+                  <Tag tone={maintaining ? 'violet' : 'emerald'}>{maintaining ? '기량 유지에 도움' : '성장에 도움'}</Tag>
                 </div>
                 <div className="mt-auto flex items-center justify-between gap-2">
                   <span className="font-pixel text-xs text-amber-300">{formatMoney(item.price)}</span>

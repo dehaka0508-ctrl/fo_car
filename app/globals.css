@@ -62,12 +62,12 @@ input[type="range"] { min-height: 32px; width: 100%; }
   .creation-preview { position: sticky; top: 24px; }
   .creation-preview .player-stage { min-height: 220px; padding-top: 28px; }
   .creation-form input[type="range"] { margin-top: 6px; }
-  .game-shell { max-width: 1680px; margin: auto; display: flex; height: 100dvh; width: 100%; flex-direction: column; gap: 20px; padding: 0 24px 24px; }
-  .game-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: 248px minmax(0, 1fr) 310px; gap: 16px; }
+  .game-shell { max-width: 1160px; margin: auto; display: flex; min-height: 100dvh; width: 100%; flex-direction: column; gap: 20px; padding: 0 24px 24px; }
+  .game-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: 260px minmax(0, 1fr); align-items: start; gap: 28px; }
   .game-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #263344; padding: 20px 0; }
   .step-nav { display: flex; gap: 4px; padding: 5px; border: 1px solid #263344; border-radius: 14px; background: #101925; }
   .step-nav button { border-radius: 9px; }
-  .mobile-shell { display: flex; height: 100dvh; flex-direction: column; gap: 10px; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+  .mobile-shell { display: flex; min-height: 100dvh; flex-direction: column; gap: 16px; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
   .mobile-shell > header { padding: 2px 3px 6px; }
   .mobile-shell nav button { min-height: 44px; }
   .mobile-shell .px-panel { border-radius: 14px; }
@@ -75,7 +75,7 @@ input[type="range"] { min-height: 32px; width: 100%; }
   .step-content table td { padding-block: 8px; }
   .step-content table tr + tr { border-top: 1px solid #263344; }
   .step-content button.px-inset { padding: 12px; min-height: 64px; }
-  .player-panel { overflow-y: auto; }
+  .player-panel { position: sticky; top: 20px; }
   .player-panel > dl { border-block: 1px solid #263344; padding-block: 16px; }
 }
 /* A quiet field motif gives the game a sense of place. */
@@ -83,7 +83,7 @@ input[type="range"] { min-height: 32px; width: 100%; }
 .stadium-field { position: absolute; width: 700px; height: 1000px; right: -160px; top: -350px; border: 1px solid #53d5a40a; border-radius: 24px; transform: rotate(-25deg); }
 .stadium-field::before { content: ""; position: absolute; width: 260px; height: 260px; border: 1px solid #53d5a40a; border-radius: 50%; left: calc(50% - 130px); top: calc(50% - 130px); }
 .stadium-field::after { content: ""; position: absolute; top: 50%; width: 100%; border-top: 1px solid #53d5a40a; }
-@media (min-width: 1400px) { .game-grid { grid-template-columns: 272px minmax(0, 1fr) 350px; gap: 20px; } }
+
 @media (max-width: 639px) {
   .creation-shell { padding: 20px 16px 32px; }
   .creation-intro { padding-top: 28px; }
@@ -107,4 +107,19 @@ input[type="range"] { min-height: 32px; width: 100%; }
   .coach-scene { height: 190px; }
   .coach-dialogue { padding: 20px; }
   .coach-setup .creation-preview { position: static; }
+}
+
+/* Comfortable reading width and a summary-first turn report. */
+@layer components {
+  .step-content { font-size: 14px; line-height: 1.75; }
+  .step-content .text-\[11px\], .step-content .text-xs { font-size: 13px; }
+  .step-content button { min-height: 40px; }
+  .career-details { padding: 18px 20px; border-top: 1px solid var(--panel-line); color: var(--color-zinc-300); font-size: 14px; }
+  .career-details > summary { cursor: pointer; font-weight: 600; }
+  .report-section { padding-block: 24px; border-top: 1px solid var(--panel-line); }
+  .report-section h3 { font-size: 17px; font-weight: 650; margin-bottom: 14px; }
+  .report-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-block: 11px; font-size: 14px; }
+  .report-row > :first-child { color: var(--color-zinc-400); }
+  .report-row > :last-child { color: var(--color-zinc-50); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .report-confirm { position: sticky; bottom: -20px; margin: 20px -20px -20px; padding: 16px 20px; background: #151f2df5; border-top: 1px solid var(--panel-line); }
 }

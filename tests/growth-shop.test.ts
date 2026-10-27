@@ -115,8 +115,8 @@ describe('경험 성장과 노화', () => {
 });
 
 describe('숨은 포텐셜 · 매 턴 자연 성장', () => {
-  it('필드 선수는 60~100 볼츠만 분포, GK는 기존 80~100 분포를 유지한다', () => {
-    for (const [position, min] of [['ST', 60], ['GK', 80]] as const) {
+  it('필드 선수는 80~100 볼츠만 분포, GK는 기존 80~100 분포를 유지한다', () => {
+    for (const [position, min] of [['ST', 80], ['GK', 80]] as const) {
       const dist = potentialDistribution(position);
       expect(dist[0].potential).toBe(min);
       expect(dist.at(-1)!.potential).toBe(100);
@@ -221,13 +221,39 @@ describe('상점 밸런스', () => {
     expect(player.attributes.sprintSpeed).toBe(rich.attributes.sprintSpeed);
   });
 
-  it('턴당 1회, 같은 아이템은 한 번만, 돈이 있어야 살 수 있다', () => {
+  it('턴당 1회, 같은 아이템도 다음 턴에 다시 살 수 있고 돈이 있어야 한다', () => {
     const item = SHOP_ITEMS[0];
     const poor = { ...makePlayer(), money: 0 };
     expect(canPurchase(poor, item, false).ok).toBe(false);
     const rich = { ...makePlayer(), money: 1_000_000 };
     expect(canPurchase(rich, item, true).ok).toBe(false);
     const owner = purchaseItem(rich, item.id, { season: 2026, phase: 'FIRST_HALF' }, rng('own')).player;
-    expect(canPurchase(owner, item, false).ok).toBe(false);
+    expect(canPurchase(owner, item, false).ok).toBe(true);
+  });
+});
+
+
+describe('베테랑의 능력치 재분배', () => {
+  it('30~35세에 피지컬이 하락하면서 일부 기술·판단 능력은 오르고 평균 한도는 넘지 않는다', () => {
+    for (const age of [29, 31, 33, 34]) {
+      const veteran = { ...atAge(makePlayer(), age), potential: 80, attributes: { ...makePlayer().attributes } };
+      for (const key of FIELD_STAT_KEYS) veteran.attributes[key] = 80;
+      const result = applySeasonalAging(veteran, rng(`veteran-${age}`));
+      expect(result.player.age).toBe(age + 1);
+      expect(result.player.attributes.sprintSpeed).toBeLessThan(80);
+      const positive = Object.entries(result.deltas).filter(([, value]) => (value ?? 0) > 0);
+      expect(positive.length).toBeGreaterThan(0);
+      expect(positive.length).toBeLessThanOrEqual(3);
+      for (const [key] of positive) expect(['sprintSpeed', 'acceleration', 'agility', 'stamina', 'strength', 'aerial']).not.toContain(key);
+      expect(fieldAttributeAverage(result.player.attributes)).toBeLessThanOrEqual(80);
+      expect(result).toEqual(applySeasonalAging(JSON.parse(JSON.stringify(veteran)), rng(`veteran-${age}`)));
+    }
+  });
+
+  it('36세 이후와 GK는 재분배 성장 없이 기존 노화만 적용된다', () => {
+    const old = applySeasonalAging(atAge(makePlayer(), 35), rng('old-stop'));
+    const keeper = applySeasonalAging(atAge(makePlayer({ role: { position: 'GK', playStyle: 'CLASSIC_GOALKEEPER' } }), 32), rng('gk-aging'));
+    expect(Object.values(old.deltas).some((value) => (value ?? 0) > 0)).toBe(false);
+    expect(Object.values(keeper.deltas).some((value) => (value ?? 0) > 0)).toBe(false);
   });
 });

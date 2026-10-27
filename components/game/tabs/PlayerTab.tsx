@@ -80,16 +80,16 @@ export function PlayerTab({ game }: { game: GameState }) {
           ) : null}
           {shields.length ? (
             <p className="mt-2 text-xs text-violet-700 dark:text-violet-400">
-              노화 방어: {shields.map(([k, v]) => `${ATTRIBUTE_META[k as AttributeKey].label} ${v}`).join(', ')}
+              노화 방어: {shields.map(([k]) => ATTRIBUTE_META[k as AttributeKey].label).join(', ')}
             </p>
           ) : null}
         </Card>
         <Card title={`보유 아이템 (${player.inventory.length})`}>
           {player.inventory.length ? (
             <div className="flex flex-wrap gap-1">
-              {player.inventory.map((owned) => (
-                <Tag key={owned.itemId} tone={owned.effect.mode === 'BOOST' ? 'emerald' : 'violet'}>
-                  {SHOP_ITEM_MAP[owned.itemId]?.name}
+              {[...new Set(player.inventory.map((owned) => owned.itemId))].map((itemId) => (
+                <Tag key={itemId}>
+                  {SHOP_ITEM_MAP[itemId]?.name} · {player.inventory.filter((owned) => owned.itemId === itemId).length}회 구매
                 </Tag>
               ))}
             </div>

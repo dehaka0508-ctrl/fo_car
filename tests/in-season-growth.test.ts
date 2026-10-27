@@ -61,11 +61,11 @@ describe('시즌 중 즉시 성장', () => {
     expect(progress({ ...player, age: 17 }, 1080)).toBeGreaterThan(progress({ ...player, age: 29 }, 1080));
   });
 
-  it('유소년 초기 성장 속도로 숨은 포텐셜을 노출하지 않되 필드 평균 한도는 지킨다', () => {
+  it('남은 포텐셜이 클수록 빠르게 성장하고 필드 평균 한도는 지킨다', () => {
     const young = makePlayer({ age: 16 });
     const a = developPlayerDuringTurn({ ...young, potential: 60 }, performance(900), rngFor(3, 'youth'), 3).player;
     const b = developPlayerDuringTurn({ ...young, potential: 95 }, performance(900), rngFor(3, 'youth'), 3).player;
-    expect(a.attributes).toEqual(b.attributes);
+    expect(fieldAttributeAverage(b.attributes) - fieldAttributeAverage(young.attributes)).toBeGreaterThan(fieldAttributeAverage(a.attributes) - fieldAttributeAverage(young.attributes));
     const nearCap = { ...young, potential: 60, attributes: { ...young.attributes } };
     for (const key of FIELD_STAT_KEYS) nearCap.attributes[key] = 60;
     nearCap.attributes.finishing = 59;
@@ -104,5 +104,52 @@ describe('시즌 중 즉시 성장', () => {
     const stats = performance(1000);
     expect(turnDevelopmentFactors(player, stats, 17)).toEqual(turnDevelopmentFactors(player, stats, 17));
     expect(turnDevelopmentFactors(player, stats, 17).pace).not.toBe(turnDevelopmentFactors(player, stats, 18).pace);
+  });
+});
+
+
+describe('성장 속도', () => {
+  it('포텐셜이 충분한 주전은 연간 평균 약 5 이상 성장하고 유소년은 더 빠르다', () => {
+    for (const age of [16, 19, 23, 26]) {
+      const player = { ...makePlayer({ age }), potential: 99, condition: 100 };
+      const averageGain = progress(player, 1080) / FIELD_STAT_KEYS.length;
+      expect(averageGain).toBeGreaterThanOrEqual(4.8);
+    }
+    const young = { ...makePlayer({ age: 16 }), potential: 99, condition: 100 };
+    const adult = { ...makePlayer({ age: 23 }), potential: 99, condition: 100 };
+    expect(progress(young, 1080)).toBeGreaterThan(progress(adult, 1080));
+  });
+
+  it('높은 포텐셜도 주전 출전을 이어가면 20대 후반까지 채울 수 있다', () => {
+    for (const potential of [85, 95, 99]) {
+      let player = { ...makePlayer({ age: 16 }), potential, condition: 85 };
+      for (let age = 16; age <= 28; age++) {
+        player = { ...player, age };
+        for (let turn = 0; turn < 3; turn++) {
+          player = developPlayerDuringTurn(player, performance(1080, 7), rngFor(31, age, turn), 31).player;
+          expect(fieldAttributeAverage(player.attributes)).toBeLessThanOrEqual(potential);
+        }
+      }
+      expect(fieldAttributeAverage(player.attributes)).toBeGreaterThanOrEqual(potential - 1);
+    }
+  });
+});
+
+
+describe('남은 잠재력에 비례하는 성장', () => {
+  it('같은 나이·출전·컨디션에서는 격차가 클수록 빠르고 기본 성장분 때문에 한도 근처에서도 성장한다', () => {
+    for (const age of [16, 23, 27]) {
+      const base = { ...makePlayer({ age }), potential: 100, condition: 100 };
+      const run = (value: number) => {
+        const attributes = { ...base.attributes };
+        for (const key of FIELD_STAT_KEYS) attributes[key] = value;
+        const player = { ...base, attributes, ovr: calculateOVR(attributes, base.profile.role) };
+        return progress(player, 1080, 7.2, 1);
+      };
+      const far = run(40); // 60점 차이
+      const near = run(80); // 20점 차이
+      expect(far / near).toBeGreaterThan(2.5);
+      expect(far / near).toBeLessThan(3);
+    }
   });
 });

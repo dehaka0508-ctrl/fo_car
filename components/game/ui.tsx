@@ -126,7 +126,7 @@ export function Field({ label, children, className }: { label: string; children:
 export function Modal({ children, onClose, title, wide = false }: { children: ReactNode; onClose?: () => void; title: ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#02040a]/80 backdrop-blur-sm p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true">
-      <div className={cx('px-panel max-h-[90dvh] w-full overflow-y-auto p-5', wide ? 'max-w-5xl' : 'max-w-lg')}>
+      <div className={cx('px-panel max-h-[90dvh] w-full overflow-y-auto p-5', wide ? 'max-w-5xl' : 'max-w-2xl')}>
         <div className="mb-4 flex items-start justify-between gap-3 border-b border-zinc-700 pb-3">
           <h2 className="text-lg font-semibold text-zinc-50">{title}</h2>
           {onClose ? (

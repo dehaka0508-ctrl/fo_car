@@ -72,7 +72,7 @@ function CareerMenu({ game, onDone }: { game: GameState; onDone: () => void }) {
   );
 }
 
-/** 게임 메인 화면: PC(가로 16:9)와 휴대폰(세로 9:16) 배치를 따로 그린다. 둘 다 한 화면에 들어가고 페이지는 스크롤되지 않는다 */
+/** 핵심 행동을 중앙에 두고 상세 기록은 필요할 때 펼친다. */
 export function Dashboard({ game }: { game: GameState }) {
   const desktop = useIsDesktop();
   const [modal, setModal] = useState<DashboardModal>(null);
@@ -82,9 +82,9 @@ export function Dashboard({ game }: { game: GameState }) {
     <>
       {desktop ? <DesktopDashboard game={game} onOpen={setModal} /> : <MobileDashboard game={game} onOpen={setModal} />}
       {(showTurnReport || modal === 'turn') && game.lastTurn ? (
-        <Modal wide title="이번 턴 결과" onClose={() => { dismissTurnReport(); setModal(null); }}>
+        <Modal title="턴 결과" onClose={() => { dismissTurnReport(); setModal(null); }}>
           <TurnSummary game={game} />
-          <div className="mt-5 flex justify-end"><Button variant="primary" onClick={() => { dismissTurnReport(); setModal(null); }}>확인하고 계속하기 →</Button></div>
+          <div className="report-confirm"><Button className="w-full py-3.5 text-sm" variant="primary" onClick={() => { dismissTurnReport(); setModal(null); }}>확인하고 계속하기 →</Button></div>
         </Modal>
       ) : null}
       {modal === 'player' ? (
@@ -103,8 +103,7 @@ export function Dashboard({ game }: { game: GameState }) {
 }
 
 /**
- * PC (16:9 한 화면)
- *  왼쪽: 선수 카드 / 가운데: 지금 단계 (경기 → 사건 → 훈련 → 상점 → 이적) / 오른쪽: 턴 성적 · 턴별 기록 · 소식
+ * PC: 선수 카드를 보조 열에 두고 현재 행동과 펼칠 수 있는 기록을 중앙에 배치한다.
  */
 function DesktopDashboard({ game, onOpen }: { game: GameState; onOpen: (modal: DashboardModal) => void }) {
   const step = useGameStore((s) => s.step);
@@ -114,8 +113,10 @@ function DesktopDashboard({ game, onOpen }: { game: GameState; onOpen: (modal: D
       <GameTopBar game={game} step={step} onStep={goStep} />
       <div className="game-grid">
         <PlayerPanel game={game} onOpen={(m) => onOpen(m)} />
-        <StepPanel game={game} step={step} />
-        <TurnResultPanel game={game} />
+        <main className="flex min-w-0 flex-col gap-5">
+          <StepPanel game={game} step={step} />
+          <details className="career-details"><summary>지난 성적 · 턴별 기록 · 소식</summary><div className="pt-4"><TurnResultPanel game={game} /></div></details>
+        </main>
       </div>
     </div>
   );
@@ -137,10 +138,10 @@ export function StepPanel({ game, step, compact = false }: { game: GameState; st
           compact ? 'px-3 py-2' : 'px-5 py-4',
         )}
       >
-        <h2 className="text-base font-semibold text-zinc-50">
+        <h2 className="text-xl font-semibold text-zinc-50">
           {FLOW_STEPS.indexOf(step) + 1}. {meta.title}
         </h2>
-        <span className="text-[11px] text-zinc-400">{meta.hint}</span>
+        
       </header>
 
       {message ? (
@@ -162,7 +163,7 @@ export function StepPanel({ game, step, compact = false }: { game: GameState; st
         </div>
       ) : null}
 
-      <div className={cx('step-content min-h-0 flex-1 overflow-y-auto', compact ? 'px-3 py-2' : 'px-5 py-4')}>{STEP_BODY[step](game)}</div>
+      <div className={cx('step-content min-h-0 flex-1', compact ? 'px-3 py-2' : 'px-5 py-4')}>{STEP_BODY[step](game)}</div>
 
       {meta.skip ? (
         <footer className={cx('flex justify-end border-t border-zinc-700', compact ? 'px-3 py-1.5' : 'px-4 py-2')}>

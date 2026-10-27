@@ -721,6 +721,7 @@ export interface TurnDevelopmentReport {
   rating: number | null;
   condition: number;
   changes: Array<{ key: AttributeKey; before: number; after: number; experience: number; natural: number }>;
+  seasonalChanges?: Array<{ key: AttributeKey; before: number; after: number }>;
   status: 'GROWN' | 'AT_POTENTIAL' | 'ACCUMULATING' | 'AGE_LIMIT';
 }
 
@@ -877,6 +878,8 @@ export interface GameEventDefinition {
   /** 이 턴이 끝나면 반드시 발생 (프리시즌 휴가 계획) */
   guaranteed?: boolean;
   weight: number;
+  cooldownTurns?: number;
+  maxOccurrences?: number;
   minAge?: number;
   maxAge?: number;
   requires?: EventRequirement;
@@ -986,6 +989,8 @@ export interface ClubSpell {
 export interface PlayerState {
   /** 소수점 성장 누적 및 능력치별 배분 잔액. 정수 상승에 사용한 몫은 차감한다. */
   developmentCredits?: Partial<Record<AttributeKey, number>>;
+  /** 30~35세 피지컬 하락분의 일부를 기술·판단에 재분배하기 위한 잔액 */
+  veteranDevelopmentCredit?: number;
   /** 약발 숙련도 0~100. 필드 능력치 평균에는 포함하지 않는다. */
   weakFoot: number;
   profile: PlayerProfile;
@@ -995,7 +1000,7 @@ export interface PlayerState {
   attributes: Attributes;
   /** 현재 포지션 기준 OVR (캐시) */
   ovr: number;
-  /** 숨은 성장 한도: 필드 선수는 18개 필드 능력치의 단순 평균(60~100), GK는 기존 최대 OVR(80~100). 화면에는 보이지 않는다 */
+  /** 숨은 성장 한도: 필드 선수는 18개 필드 능력치의 단순 평균(80~100), GK는 기존 최대 OVR(80~100). 화면에는 보이지 않는다 */
   potential: number;
   reputation: number;
   /** 체력(컨디션) 0~100: 매 턴 실제 출전 경기 수를 결정 */
@@ -1123,6 +1128,8 @@ export interface GameState {
   negotiation: NegotiationQuota;
   /** 이번 턴 사이에 발생한 사건 (모두 답해야 다음 턴 진행) */
   events: ActiveEvent[];
+  /** 발생 시점에 기록. 이전 세이브는 첫 진행 시 초기화한다. */
+  eventHistory?: Record<ID, { count: number; lastTurn: number }>;
   /** 턴 사이 행동 (훈련 1회, 구매 1회) */
   interTurn: { training: TrainingResult | null; purchasedItemId: ID | null };
   flags: Partial<Record<GameFlag, boolean>>;

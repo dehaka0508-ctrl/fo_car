@@ -151,7 +151,7 @@ function LastTurn({ turn, game, isGK }: { turn: TurnResult; game: GameState; isG
         <Tile label="평점" value={ratingText(rating)} tone={ratingTone(rating)} />
       </div>
       {midfielder ? <div className="grid grid-cols-2 gap-2"><Tile label="패스 성공률" value={passAccuracy(line) === null ? '-' : `${passAccuracy(line)!.toFixed(1)}%`} sub={`${line.passesCompleted ?? 0}/${line.passesAttempted ?? 0}`} /><Tile label="키패스" value={line.keyPasses} /></div> : null}
-      <TurnGrowth report={turn.development} isGoalkeeper={isGK} compact />
+      <TurnGrowth report={turn.development} compact />
       <p className="text-xs text-zinc-200">
         {team ? (
           <>

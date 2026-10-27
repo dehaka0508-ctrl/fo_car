@@ -1,7 +1,7 @@
 /**
  * 성장 곡선 점검: npm run sim:growth   (CAREERS=10 시나리오별 커리어 수)
  *
- * AI 대리 플레이 커리어에서 숨은 포텐셜(필드 60~100, GK 80~100)에 언제 닿는지 본다.
+ * AI 대리 플레이 커리어에서 숨은 포텐셜(필드 80~100, GK 80~100)에 언제 닿는지 본다.
  * 필드는 18개 능력치 단순 평균, GK는 OVR로 도달 여부를 검사한다.
  */
 import { autoInterTurn } from '@/engine/autoplay';

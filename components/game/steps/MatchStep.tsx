@@ -98,7 +98,7 @@ export function MatchStep({ game }: { game: GameState }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" className="px-6 py-3 text-sm" disabled={!check.ok} onClick={playTurn}>
+        <Button variant="primary" className="w-full px-6 py-3.5 text-sm" disabled={!check.ok} onClick={playTurn}>
           다음 경기 진행 →
         </Button>
         <Button onClick={() => autoPlay(1)} title="AI가 사건·훈련·구매·이적과 경기를 대신 진행합니다">
@@ -107,7 +107,6 @@ export function MatchStep({ game }: { game: GameState }) {
         <Button onClick={() => autoPlay(3)}>자동 1시즌</Button>
         {!check.ok ? <Tag tone="rose">{check.reasons.join(', ')}</Tag> : null}
       </div>
-      <p className="text-[11px] text-zinc-500">턴마다 하이라이트 경기 한 번은 직접 선택을 내립니다. 경기가 끝나면 사건 → 훈련 → 상점 → 이적 순서로 넘어갑니다.</p>
     </div>
   );
 }

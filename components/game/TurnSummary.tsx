@@ -4,7 +4,7 @@ import { mergeStatLines, averageRating, passAccuracy } from '@/engine/simulator'
 import type { CompetitionType, GameState, PlayerStatLine } from '@/types/game';
 import { clubLabel, competitionName, ratingText, seasonLabel } from './format';
 import { TurnGrowth } from './TurnGrowth';
-import { Card, cx, Stat, Tag } from './ui';
+import { Card, cx, Tag } from './ui';
 
 const COMPETITION_LABELS: Record<CompetitionType, string> = {
   LEAGUE: '리그', DOMESTIC_CUP: '국내컵', CONTINENTAL: '대륙컵',
@@ -35,36 +35,35 @@ export function TurnSummary({ game }: { game: GameState }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-5">
-        <p className="eyebrow">TURN REVIEW</p>
+        
         <h3 className="mt-1 text-xl font-semibold text-zinc-50">{seasonLabel(turn.turn.season)} {TURN_PHASE_LABELS[turn.turn.phase]}</h3>
-        <p className="mt-1 text-xs text-zinc-400">{game.player.profile.name} · {turn.playerPosition ?? game.player.profile.role.position} · 이번 턴 전체 대회 합산 · {total.minutes}분 출전</p>
-        {turn.development ? <p className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-300">이번 턴 성장 · OVR {turn.development.ovrBefore} → {turn.development.ovrAfter}{turn.development.changes.length ? ` · 능력치 ${turn.development.changes.length}개 상승` : ' · 성장 내역 확인'}</p> : null}
-        <div className={cx('mt-5 grid grid-cols-2 gap-5', isMidfielder ? 'sm:grid-cols-3' : 'sm:grid-cols-4')}>
-          <Stat label="출전 경기" value={total.appearances} sub={`선발 ${total.starts}회`} accent />
-          <Stat label={firstLabel} value={value(total, firstStat)} accent />
-          <Stat label={secondLabel} value={value(total, secondStat)} accent />
-          <Stat label="평균 평점" value={ratingText(averageRating(total))} accent />
-          {isMidfielder ? <><Stat label="패스 성공률" value={passAccuracy(total) === null ? '-' : `${passAccuracy(total)!.toFixed(1)}%`} sub={`${total.passesCompleted ?? 0} / ${total.passesAttempted ?? 0}회`} accent /><Stat label="키패스" value={total.keyPasses} accent /></> : null}
+        <p className="mt-1 text-xs text-zinc-400">{game.player.profile.name} · {turn.playerPosition ?? game.player.profile.role.position} · {total.minutes}분 출전</p>
+        <div className="mt-5 divide-y divide-zinc-800">
+          <ReportRow label="출전 경기" value={total.appearances} sub={`선발 ${total.starts}회`} />
+          <ReportRow label={firstLabel} value={value(total, firstStat)} />
+          <ReportRow label={secondLabel} value={value(total, secondStat)} />
+          <ReportRow label="평균 평점" value={ratingText(averageRating(total))} />
+          {isMidfielder ? <><ReportRow label="패스 성공률" value={passAccuracy(total) === null ? '-' : `${passAccuracy(total)!.toFixed(1)}%`} sub={`${total.passesCompleted ?? 0} / ${total.passesAttempted ?? 0}회`} /><ReportRow label="키패스" value={total.keyPasses} /></> : null}
         </div>
         {isDefender ? <p className="mt-3 text-xs text-zinc-300">공격 기여 · {total.goals}골 {total.assists}도움</p> : null}
       </div>
 
-      <TurnGrowth report={turn.development} isGoalkeeper={isGK} />
-      <Card title="대회별 개인 성적">
+      <TurnGrowth report={turn.development} />
+      <details className="career-details"><summary>대회별 개인 성적</summary><div className="pt-4">
         {played.length ? <div className="overflow-x-auto"><table className={cx('w-full text-right text-xs tabular-nums', isMidfielder ? 'min-w-[480px]' : 'min-w-[280px]')}>
           <thead className="text-zinc-400"><tr><th className="pb-3 text-left font-medium">대회</th><th className="pb-3 font-medium">출전</th><th className="pb-3 font-medium">{firstLabel}</th><th className="pb-3 font-medium">{secondLabel}</th>{isMidfielder ? <><th className="pb-3 font-medium">패스 성공률</th><th className="pb-3 font-medium">키패스</th></> : null}<th className="pb-3 font-medium">평점</th></tr></thead>
           <tbody>{played.map(([type, line]) => <tr key={type} className="border-t border-zinc-800"><td className="py-3 text-left text-zinc-200">{COMPETITION_LABELS[type]}</td><td>{line.appearances}</td><td className="text-emerald-300">{value(line, firstStat)}</td><td>{value(line, secondStat)}</td>{isMidfielder ? <><td>{passAccuracy(line) === null ? '-' : `${passAccuracy(line)!.toFixed(1)}%`}</td><td>{line.keyPasses}</td></> : null}<td>{ratingText(averageRating(line))}</td></tr>)}</tbody>
         </table></div> : <p className="text-sm text-zinc-400">이번 턴에는 출전 기록이 없습니다.</p>}
-      </Card>
+      </div></details>
 
-      <div className="grid items-start gap-5 md:grid-cols-2">
+      <div className="flex flex-col gap-5">
         <Card title="리그 결과 · 순위" actions={standing ? <Tag tone="emerald">{standing.position}위 · {standing.points}점</Tag> : undefined}>
           {standing ? <p className="mb-3 text-xs text-zinc-400">{clubLabel(clubId)} · 시즌 누적 {standing.wins}승 {standing.draws}무 {standing.losses}패</p> : null}
           {turn.teamStats.LEAGUE ? <p className="mb-3 text-xs text-zinc-200">이번 턴 {turn.teamStats.LEAGUE.wins}승 {turn.teamStats.LEAGUE.draws}무 {turn.teamStats.LEAGUE.losses}패</p> : null}
-          {turn.leagueTable.length ? <div className="max-h-80 overflow-auto"><table className="w-full min-w-[240px] text-right text-xs tabular-nums">
+          {turn.leagueTable.length ? <details><summary className="cursor-pointer py-2 text-sm text-zinc-300">전체 순위표</summary><div className="max-h-80 overflow-auto"><table className="w-full min-w-[240px] text-right text-xs tabular-nums">
             <thead className="sticky top-0 bg-zinc-900 text-zinc-400"><tr><th className="py-2 text-left font-medium">순위 / 팀</th><th className="font-medium">경기</th><th className="font-medium">득실</th><th className="font-medium">승점</th></tr></thead>
             <tbody>{turn.leagueTable.map((row) => <tr key={row.clubId} className={cx('border-t border-zinc-800', row.clubId === clubId ? 'bg-emerald-400/10 font-semibold text-emerald-300' : 'text-zinc-300')}><td className="py-2.5 text-left">{row.position}. {clubLabel(row.clubId)}</td><td>{row.played}</td><td>{row.goalsFor - row.goalsAgainst}</td><td className="font-semibold">{row.points}</td></tr>)}</tbody>
-          </table></div> : <p className="text-sm text-zinc-400">이번 턴에는 1군 리그 경기가 없습니다.</p>}
+          </table></div></details> : <p className="text-sm text-zinc-400">리그 경기 없음</p>}
           {turn.trophies.filter((t) => t.competitionId === turn.leagueId).map((t) => <p key={t.competitionId} className="mt-3 text-sm font-semibold text-amber-300">🏆 {competitionName(t.competitionId)} 우승</p>)}
         </Card>
         <Card title="컵 대회 결과 · 현황">
@@ -85,4 +84,8 @@ export function TurnSummary({ game }: { game: GameState }) {
       </div>
     </div>
   );
+}
+
+function ReportRow({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return <div className="report-row"><span>{label}</span><span>{value}{sub ? <span className="ml-2 text-xs font-normal text-zinc-400">{sub}</span> : null}</span></div>;
 }

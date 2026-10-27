@@ -1,16 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { PixelBall } from '@/components/pixel/PixelIcons';
 import { PlayerStage } from '@/components/pixel/PlayerStage';
 import { EYE_COLORS, HAIR_COLORS, SKIN_TONES } from '@/data/appearance';
-import { PLAYING_TIME_LABELS, SQUAD_LEVEL_LABELS } from '@/data/labels';
 import { PLAYSTYLE_DEFINITIONS, POSITION_META } from '@/data/playstyles';
 import { BASE_WORLD } from '@/engine/career';
 import { findClubId } from '@/engine/world';
-import { createPlayer } from '@/engine/character';
 import { useGameStore } from '@/store/gameStore';
 import {
   PLAYSTYLES_BY_POSITION,
@@ -22,7 +20,7 @@ import {
   type Position,
   type SkinTone,
 } from '@/types/game';
-import { Button, Card, Field, fieldClass, Stat } from './ui';
+import { Button, Card, Field, fieldClass } from './ui';
 
 const nations = Object.values(BASE_WORLD.nations).sort((a, b) => a.nameKo.localeCompare(b.nameKo, 'ko'));
 const leagues = Object.values(BASE_WORLD.leagues);
@@ -116,7 +114,6 @@ export function CreationScreen() {
   const [skin, setSkin] = useState<SkinTone>(3);
   const [eyes, setEyes] = useState<EyeColor>('DARK_BROWN');
   const input = { name: name.trim() || '나의 선수', nationality, role: { position, playStyle } as PlayerRole, dominantFoot, heightCm, weightKg, appearance: { hair, skin, eyes }, clubId };
-  const preview = useMemo(() => createPlayer({ name: '미리보기', nationality, role: { position, playStyle } as PlayerRole, dominantFoot, heightCm, weightKg, appearance: { hair, skin, eyes }, clubId }, BASE_WORLD, { seed: 1, startSeason: 2026 }), [nationality, position, playStyle, dominantFoot, heightCm, weightKg, hair, skin, eyes, clubId]);
   const club = BASE_WORLD.clubs[clubId];
   const steps = ['이름과 국적', '플레이와 주발', '시작 팀', '외모'];
   const dialogue = [
@@ -164,7 +161,6 @@ export function CreationScreen() {
       <Card className="creation-preview flex flex-col items-center gap-4 text-center">
         <p className="eyebrow self-start">YOUR PROSPECT</p><PlayerStage className="w-full"><Avatar appearance={input.appearance} kit={club.kitColors} size={172} ball /></PlayerStage>
         <div><p className="text-xl font-bold">{input.name}</p><p className="mt-1 text-xs text-zinc-400">{BASE_WORLD.nations[nationality]?.nameKo} · 16세 · {position}</p><p className="mt-1 text-xs text-zinc-300">{club.nameKo} · {dominantFoot === 'LEFT' ? '왼발' : '오른발'}</p></div>
-        <div className="grid w-full grid-cols-2 gap-3 border-y border-zinc-800 py-4 text-left"><Stat label="초기 OVR (예상)" value={preview.ovr} accent /><Stat label="시작 입지" value={SQUAD_LEVEL_LABELS[preview.squad.level]} sub={PLAYING_TIME_LABELS[preview.squad.playingTime]} /></div>
         <p className="text-xs text-zinc-400">질문에 답하면 선수 카드가 완성됩니다.</p><Link href="/sandbox" className="text-xs text-zinc-500 hover:text-zinc-300">시뮬레이션 샌드박스 ↗</Link>
       </Card>
     </div>

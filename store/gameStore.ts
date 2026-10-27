@@ -184,9 +184,9 @@ export const useGameStore = create<GameStore>()(
         buy: (itemId) =>
           run(() => {
             const game = buyInterTurn(get().game!, itemId);
-            const owned = game.player.inventory.find((o) => o.itemId === itemId);
+            const owned = game.player.inventory.at(-1);
             const item = SHOP_ITEM_MAP[itemId];
-            const effect = owned?.effect.mode === 'BOOST' ? `${ATTRIBUTE_META[item.attribute].label} +${owned.effect.amount}` : `노화 방어 ${owned?.effect.amount ?? 0}`;
+            const effect = owned?.effect.mode === 'BOOST' ? `${ATTRIBUTE_META[item.attribute].label} 성장에 도움` : '기량 유지에 도움';
             return { game, step: nextStep(game, 'SHOP'), flash: { title: `${item.name} 구매`, lines: [effect] } };
           }),
         answerEvent: (instanceId, choiceId) =>
@@ -262,7 +262,7 @@ export const useGameStore = create<GameStore>()(
         let loaded = saved.game ?? null;
         // 포텐셜 도입 전 세이브: 시드로 숨은 포텐셜을 정한다
         if (loaded && loaded.player.potential === undefined) loaded = { ...loaded, player: { ...loaded.player, potential: rollPotential(loaded.seed, loaded.player.profile.role.position) } };
-        if (loaded) loaded = { ...loaded, player: { ...loaded.player, weakFoot: loaded.player.weakFoot ?? 40, profile: { ...loaded.player.profile, dominantFoot: loaded.player.profile.dominantFoot ?? 'RIGHT' }, ovr: calculateOVR(loaded.player.attributes, loaded.player.profile.role) } };
+        if (loaded) loaded = { ...loaded, player: { ...loaded.player, potential: Math.max(80, Math.min(100, loaded.player.potential)), weakFoot: loaded.player.weakFoot ?? 40, profile: { ...loaded.player.profile, dominantFoot: loaded.player.profile.dominantFoot ?? 'RIGHT' }, ovr: calculateOVR(loaded.player.attributes, loaded.player.profile.role) } };
         const game = loaded && !saved.session && loaded.stage === 'READY' ? syncWithDatabase(loaded) : loaded;
         // 단계 정보가 없는 예전 세이브는 할 일이 남은 첫 단계부터
         const step = saved.step ?? (game ? nextStep(game, 'MATCH') : 'MATCH');

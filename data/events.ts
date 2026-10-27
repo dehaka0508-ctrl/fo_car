@@ -70,7 +70,9 @@ export const GAME_EVENTS: GameEventDefinition[] = [
     title: '가족의 입원',
     body: '{name}의 어머니가 갑자기 병원에 입원하셨다는 연락이 왔다.',
     phases: ALL,
-    weight: 3,
+    weight: 0.4,
+    cooldownTurns: 12,
+    maxOccurrences: 2,
     choices: [
       { id: 'visit', label: '경기 후 바로 병원으로', effects: [{ kind: 'MENTAL', delta: 4 }, { kind: 'CONDITION', delta: -6 }] },
       { id: 'leave', label: '구단에 휴가를 요청한다', effects: [{ kind: 'MENTAL', delta: 7 }, { kind: 'STANDING', delta: -4 }] },

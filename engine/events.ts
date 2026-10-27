@@ -15,17 +15,24 @@ import type {
   TurnPhase,
 } from '@/types/game';
 import { POSITION_META } from '@/data/playstyles';
-import { PLAYSTYLES_BY_POSITION, POSITIONS, type Position } from '@/types/game';
+import { PLAYSTYLES_BY_POSITION, POSITIONS, TURN_PHASES, type Position } from '@/types/game';
 import { calculateOVR, rankPositionFit } from './ovr';
 import { clamp, hashSeed, rngFor, type Rng } from './rng';
 import { formatMoney } from './state';
 import { clubName, type SimulationWorld } from './world';
+
+export const eventTurnIndex = (state: GameState): number => state.turn.season * TURN_PHASES.length + TURN_PHASES.indexOf(state.turn.phase);
 
 export function isEventAvailable(def: GameEventDefinition, state: GameState, completedPhase: TurnPhase): boolean {
   const { player } = state;
   if (!def.phases.includes(completedPhase)) return false;
   if (def.minAge !== undefined && player.age < def.minAge) return false;
   if (def.maxAge !== undefined && player.age > def.maxAge) return false;
+  const occurrence = state.eventHistory?.[def.id];
+  if (occurrence && def.maxOccurrences !== undefined && occurrence.count >= def.maxOccurrences) return false;
+  if (occurrence && def.cooldownTurns !== undefined && eventTurnIndex(state) - occurrence.lastTurn < def.cooldownTurns) return false;
+  // Older saves have no ledger; the previous active event still prevents an immediate repeat.
+  if (!occurrence && def.cooldownTurns && state.events.some((event) => event.definitionId === def.id)) return false;
   const req = def.requires;
   if (!req) return true;
   if (req.partner && !(state.partner && state.partner.status === 'ACTIVE')) return false;

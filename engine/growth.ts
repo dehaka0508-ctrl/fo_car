@@ -7,7 +7,7 @@
  *  3) 자연 성장 (매 턴): 모든 능력치가 소폭 오르고 포지션 핵심 능력치가 더 오른다.
  *     피지컬은 어릴 때 빠르게(25세 무렵 멈춤), 기술은 30세 무렵까지, 판단력(멘탈)은 33세 무렵까지 오른다.
  *  4) 노화 (시즌 종료): 30세 전후부터 스피드 → 체력 → 기술 순으로 하락
- * 필드 선수 포텐셜(60~100)은 18개 능력치 단순 평균의 성장 한도, GK(80~100)는 기존 최대 OVR이다.
+ * 필드 선수 포텐셜(80~100)은 18개 능력치 단순 평균의 성장 한도, GK(80~100)는 기존 최대 OVR이다.
  *  - levelFactor: 현재 수치가 '포텐셜에 비해' 높을수록 덜 오른다 (재능이 클수록 높은 수치에서도 잘 오른다)
  *  - potentialFactor: 성장 기준값이 포텐셜에 가까워지면 모든 상승이 줄고, 포텐셜에 닿으면 멈춘다
  * 경기·자연 성장의 소수점은 턴을 넘어 누적하고, 선택 훈련은 확률적 반올림으로 정수화한다.
@@ -524,8 +524,29 @@ export function applySeasonalAging(player: PlayerState, rng: Rng): AgingResult {
   }
 
   const deltas = roundDeltas(rng, expected);
+  let veteranDevelopmentCredit = player.veteranDevelopmentCredit ?? 0;
+  if (!isGK && newAge >= 30 && newAge <= 35) {
+    const lostPhysical = FIELD_STAT_KEYS.reduce((sum, key) => sum + (GROWTH_GROUP[key] === 'PHYSICAL' ? Math.max(0, player.attributes[key] - clamp(player.attributes[key] + (deltas[key] ?? 0), 1, 99)) : 0), 0);
+    const credit = veteranDevelopmentCredit + lostPhysical * 0.35;
+    let budget = Math.min(3, Math.floor(credit));
+    veteranDevelopmentCredit = credit - Math.floor(credit);
+    const afterDecline = applyDeltas(player, deltas);
+    let room = Math.max(0, Math.floor((potentialOf(player) - fieldAttributeAverage(afterDecline.attributes)) * FIELD_STAT_KEYS.length + 1e-8));
+    const weights = roleWeights(player);
+    const candidates = FIELD_STAT_KEYS.filter((key) => GROWTH_GROUP[key] !== 'PHYSICAL' && player.attributes[key] < 99);
+    while (budget > 0 && candidates.length) {
+      const eligible = candidates.filter((key) => 1 - (deltas[key] ?? 0) <= Math.min(budget, room));
+      if (!eligible.length) break;
+      const key = eligible[rng.weightedIndex(eligible.map((candidate) => 0.5 + (weights[candidate] ?? 0)))];
+      const cost = 1 - (deltas[key] ?? 0);
+      deltas[key] = 1;
+      budget -= cost;
+      room -= cost;
+      candidates.splice(candidates.indexOf(key), 1);
+    }
+  }
   const aged = applyDeltas({ ...player, age: newAge }, deltas);
-  return { player: { ...aged, agingShields: {} }, deltas, shielded };
+  return { player: { ...aged, veteranDevelopmentCredit, agingShields: {} }, deltas, shielded };
 }
 
 /** 공개된 성장 가이드의 원칙을 바탕으로 출전·활약·컨디션을 매 턴 반영한다. */
@@ -548,11 +569,46 @@ export function turnDevelopmentFactors(player: PlayerState, stats: Record<Compet
     naturalMultiplier: config.naturalBase * opportunity * performance * health * pace };
 }
 
+/** 남은 평균 격차 중 1년 동안 성장하는 비율. 어린 선수일수록 높다. */
+export function fieldGrowthRate(age: number): number {
+  const curve: ReadonlyArray<[number, number]> = [[16, 0.4], [19, 0.35], [23, 0.3], [27, 0.28], [30, 0.1], [32, 0]];
+  if (age <= 16) return 0.4;
+  for (let i = 1; i < curve.length; i++) {
+    const [end, value] = curve[i];
+    const [start, previous] = curve[i - 1];
+    if (age <= end) return previous + (value - previous) * (age - start) / (end - start);
+  }
+  return 0;
+}
+
+function applyFieldDevelopment(player: PlayerState, factors: ReturnType<typeof turnDevelopmentFactors>, experiencePoints: number, rng: Rng): { player: PlayerState; deltas: Partial<Record<AttributeKey, number>> } {
+  const rate = fieldGrowthRate(player.age);
+  if (rate <= 0 || potentialFactor(player) <= 0) return { player, deltas: {} };
+  const room = Math.max(0, potentialOf(player) - fieldAttributeAverage(player.attributes));
+  // 연간 평균 성장 기대값 = 남은 격차 × 나이별 성장률 + 1. 한도 직전에도 실제로 도달할 수 있다.
+  const annual = room * rate + 1;
+  const opportunity = factors.youth ? 1 : GROWTH_CONFIG.inSeason.adultBenchBase + (1 - GROWTH_CONFIG.inSeason.adultBenchBase) * Math.min(1.1, factors.exposure);
+  const health = 0.85 + 0.15 * factors.condition / 100;
+  const performance = factors.rating === null ? 1 : clamp(1 + (factors.rating - 6.7) * 0.12, 0.85, 1.2);
+  const points = Math.max(0, annual / 3 * FIELD_STAT_KEYS.length * opportunity * health * performance * factors.pace - experiencePoints);
+  const weights = roleWeights(player);
+  const shares = FIELD_STAT_KEYS.filter((key) => player.attributes[key] < 99).map((key) => ({
+    key,
+    // 모든 필드 능력치가 같은 평균 한도에 도달할 수 있어야 한다. 핵심 능력치는 먼저 자란다.
+    share: (0.65 + (weights[key] ?? 0)) * Math.max(0.35, turnGrowthRate(GROWTH_GROUP[key], player.age)) * Math.sqrt((100 - player.attributes[key]) / 60) * focusMultiplier(player, key),
+  }));
+  const sum = shares.reduce((total, item) => total + item.share, 0);
+  const expected = Object.fromEntries(shares.map(({ key, share }) => [key, points * share / sum]));
+  return settleDevelopment(player, expected, rng, { multiplier: 1, youth: factors.youth });
+}
+
 /** 경기 경험과 자연 성장을 시즌 중 전반기·후반기를 포함한 모든 턴에 즉시 적용한다. */
 export function developPlayerDuringTurn(player: PlayerState, stats: Record<CompetitionType, PlayerStatLine>, rng: Rng, seed: number, conditionStart = player.condition): { player: PlayerState; report: TurnDevelopmentReport } {
   const factors = turnDevelopmentFactors(player, stats, seed, conditionStart);
   const experience = applyMatchExperience(player, stats, rng, { multiplier: factors.experienceMultiplier, youth: factors.youth });
-  const natural = applyTurnGrowth(experience.player, rng, { multiplier: factors.naturalMultiplier, youth: factors.youth });
+  const natural = player.profile.role.position === 'GK'
+    ? applyTurnGrowth(experience.player, rng, { multiplier: factors.naturalMultiplier, youth: factors.youth })
+    : applyFieldDevelopment(experience.player, factors, Object.values(experience.deltas).reduce((sum, value) => sum + (value ?? 0), 0), rng);
   const changes = ATTRIBUTE_KEYS.flatMap((key) => {
     const before = player.attributes[key];
     const after = natural.player.attributes[key];
@@ -565,3 +621,4 @@ export function developPlayerDuringTurn(player: PlayerState, stats: Record<Compe
     status: changes.length ? 'GROWN' : potentialFactor(player) <= 0 ? 'AT_POTENTIAL' : Object.values(GROWTH_GROUP).every((group) => turnGrowthRate(group, player.age) <= 0) && player.age > 35 ? 'AGE_LIMIT' : 'ACCUMULATING',
   } };
 }
+
