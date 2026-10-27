@@ -60,7 +60,7 @@ function Tile({ label, value, sub, tone }: { label: string; value: string | numb
   return (
     <div className="px-inset m-[2px] flex flex-col items-center px-1 py-2">
       <span className="text-[11px] text-zinc-400">{label}</span>
-      <span className={cx('font-pixel text-2xl leading-7 tabular-nums drop-shadow-[2px_2px_0_#05080f]', tone ?? 'text-zinc-50')}>{value}</span>
+      <span className={cx('font-pixel text-2xl leading-7 tabular-nums', tone ?? 'text-zinc-50')}>{value}</span>
       {sub ? <span className="text-[10px] text-zinc-500">{sub}</span> : <span className="text-[10px]">&nbsp;</span>}
     </div>
   );
@@ -85,13 +85,13 @@ export function TurnResultPanel({ game }: { game: GameState }) {
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      <section className="px-panel m-[3px] flex min-h-0 flex-1 flex-col gap-3 p-3">
+      <section className="px-panel flex min-h-0 flex-1 flex-col gap-4 p-4">
         {turn ? <LastTurn turn={turn} game={game} isGK={isGK} /> : <NoTurnYet />}
         <TurnHistory game={game} isGK={isGK} />
       </section>
-      <section className="px-panel m-[3px] flex max-h-44 min-h-0 shrink-0 flex-col p-3">
-        <h2 className="mb-2 flex items-center gap-2 text-xs font-bold text-amber-300">
-          <span aria-hidden="true" className="inline-block size-2 bg-emerald-400 shadow-[2px_2px_0_0_#05080f]" />
+      <section className="px-panel flex max-h-44 min-h-0 shrink-0 flex-col p-4">
+        <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-zinc-100">
+          <span aria-hidden="true" className="inline-block size-1.5 rounded-full bg-emerald-400" />
           소식
         </h2>
         <ul className="flex min-h-0 flex-col gap-1.5 overflow-y-auto pr-1">
@@ -110,7 +110,7 @@ export function TurnResultPanel({ game }: { game: GameState }) {
 function NoTurnYet() {
   return (
     <div className="flex flex-col gap-2">
-      <h2 className="text-xs font-bold text-amber-300">턴 성적</h2>
+      <h2 className="text-sm font-semibold text-zinc-100">턴 성적</h2>
       <p className="px-inset m-[2px] p-3 text-sm text-zinc-300">아직 치른 경기가 없습니다. 첫 경기를 마치면 여기에 턴 성적이 크게 표시됩니다.</p>
     </div>
   );
@@ -130,7 +130,7 @@ function LastTurn({ turn, game, isGK }: { turn: TurnResult; game: GameState; isG
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-xs font-bold text-amber-300">
+        <h2 className="text-sm font-semibold text-zinc-100">
           {seasonLabel(turn.turn.season)} {TURN_PHASE_LABELS[turn.turn.phase]} 성적
         </h2>
         <Tag>{label}</Tag>

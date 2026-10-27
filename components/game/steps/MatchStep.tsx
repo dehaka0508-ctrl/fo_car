@@ -30,8 +30,9 @@ export function MatchStep({ game }: { game: GameState }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="font-pixel text-2xl text-zinc-50 drop-shadow-[2px_2px_0_#05080f]">
+      <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/5 p-5">
+        <p className="eyebrow mb-2">MATCHDAY</p>
+        <p className="font-pixel text-2xl text-zinc-50">
           {seasonLabel(game.turn.season)} {TURN_PHASE_LABELS[game.turn.phase]}
         </p>
         <p className="text-xs text-zinc-400">{PHASE_TEXT[game.turn.phase]}</p>
@@ -98,7 +99,7 @@ export function MatchStep({ game }: { game: GameState }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="primary" className="px-6 py-3 text-sm" disabled={!check.ok} onClick={playTurn}>
-          ▶ 턴 진행
+          다음 경기 진행 →
         </Button>
         <Button onClick={() => autoPlay(1)} title="AI가 사건·훈련·구매·이적과 경기를 대신 진행합니다">
           자동 1턴

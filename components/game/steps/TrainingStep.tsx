@@ -29,7 +29,7 @@ function Segment<T extends string>({ value, options, onChange }: { value: T; opt
           onClick={() => onChange(key)}
           className={cx(
             'px-btn m-[2px] px-3 py-1.5 text-xs font-bold',
-            value === key ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700',
+            value === key ? 'bg-emerald-400 text-zinc-950' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700',
           )}
         >
           {label}

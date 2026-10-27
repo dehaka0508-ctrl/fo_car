@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
+import { PixelBall } from '@/components/pixel/PixelIcons';
 import { PlayerStage } from '@/components/pixel/PlayerStage';
 import { EYE_COLORS, HAIR_COLORS, SKIN_TONES } from '@/data/appearance';
 import { PLAYING_TIME_LABELS, SQUAD_LEVEL_LABELS } from '@/data/labels';
@@ -67,8 +68,8 @@ function Swatches<T extends string | number>({
             title={o.label}
             onClick={() => onChange(o.key)}
             className={[
-              'px-focus size-7 shadow-[0_0_0_2px_#05080f]',
-              o.key === value ? 'outline-2 outline-offset-2 outline-amber-300' : 'opacity-80 hover:opacity-100',
+              'px-focus size-7 rounded-full border border-white/20 transition',
+              o.key === value ? 'outline-2 outline-offset-2 outline-emerald-300' : 'opacity-80 hover:opacity-100',
             ].join(' ')}
             style={{ background: o.color }}
           />
@@ -111,18 +112,22 @@ export function CreationScreen() {
   const club = BASE_WORLD.clubs[clubId];
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
-      <header className="flex flex-col gap-1 self-start bg-zinc-950/70 px-3 py-2 shadow-[0_0_0_2px_rgb(5_8_15/0.5)]">
-        <p className="font-pixel text-xs font-bold text-emerald-400 drop-shadow-[2px_2px_0_#05080f]">NEW CAREER · 새 커리어</p>
-        <h1 className="text-2xl font-bold text-zinc-50 drop-shadow-[3px_3px_0_#05080f]">16세 유망주를 만들어 주세요</h1>
-        <p className="text-sm text-zinc-200 drop-shadow-[1px_1px_0_#05080f]">
-          포지션·플레이 스타일·키·몸무게로 초기 능력치가 정해지고, 시작 팀 수준과 비교해 1군·B팀·유소년팀 중 출발점이 정해집니다.
-        </p>
+    <div className="creation-shell">
+      <div className="flex items-center gap-3 border-b border-zinc-800 pb-5">
+        <span className="brand-mark"><PixelBall size={22} /></span>
+        <span className="text-sm font-bold tracking-wide text-zinc-100">FOOTBALL CAREER</span>
+        <span className="ml-auto text-xs text-zinc-400">나만의 축구 인생</span>
+      </div>
+      <header className="creation-intro">
+        <p className="eyebrow">NEW CAREER / 01</p>
+        <h1>당신의 축구 인생이<br />여기서 시작됩니다.</h1>
+        <p>16세 유망주에서 구단의 레전드까지. 나만의 선수를 만들고,<br className="hidden sm:block" /> 그라운드 위에서 새로운 이야기를 써 내려가세요.</p>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <Card>
-          <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <Card title="선수 프로필" actions={<span className="text-xs text-zinc-500">PLAYER SETUP</span>} className="creation-form p-6">
+          <p className="mb-5 text-xs leading-relaxed text-zinc-400">포지션과 신체 조건에 따라 초기 능력치가 달라집니다. 시작 팀의 수준에 맞춰 1군·B팀·유소년팀에서 커리어를 시작합니다.</p>
+          <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
             <Field label="이름">
               <input className={fieldClass} value={name} maxLength={20} onChange={(e) => setName(e.target.value)} />
             </Field>
@@ -196,7 +201,7 @@ export function CreationScreen() {
                 ))}
               </select>
             </Field>
-            <div className="grid gap-4 border-t-2 border-dashed border-zinc-700 pt-4 sm:col-span-2 sm:grid-cols-3">
+            <div className="grid gap-5 border-t border-zinc-800 pt-5 sm:col-span-2 sm:grid-cols-3">
               <Swatches
                 label="머리색"
                 value={hair}
@@ -219,25 +224,26 @@ export function CreationScreen() {
           </div>
         </Card>
 
-        <Card className="order-first flex flex-col items-center gap-4 self-start text-center lg:order-none">
+        <Card className="creation-preview flex flex-col items-center gap-5 self-start p-6 text-center">
+          <p className="eyebrow self-start">YOUR PROSPECT</p>
           <PlayerStage className="w-full">
             <Avatar appearance={input.appearance} kit={club.kitColors} size={172} ball idle />
           </PlayerStage>
           <div>
-            <p className="font-pixel text-base font-bold text-zinc-50">{input.name}</p>
+            <p className="text-xl font-bold text-zinc-50">{input.name}</p>
             <p className="text-xs text-zinc-400">
               {BASE_WORLD.nations[nationality]?.nameKo} · 16세 · {club.nameKo}
             </p>
           </div>
-          <div className="grid w-full grid-cols-2 gap-3 text-left">
+          <div className="grid w-full grid-cols-2 gap-4 border-y border-zinc-800 py-5 text-left">
             <Stat label="초기 OVR (예상)" value={preview.ovr} accent />
             <Stat label="시작 입지" value={SQUAD_LEVEL_LABELS[preview.squad.level]} sub={PLAYING_TIME_LABELS[preview.squad.playingTime]} />
           </div>
           <Button variant="primary" className="w-full py-3 text-sm" onClick={() => newCareer(input)}>
-            ▶ 커리어 시작
+            커리어 시작하기 →
           </Button>
           <Link href="/sandbox" className="text-xs text-zinc-500 underline-offset-2 hover:underline">
-            엔진 샌드박스 열기
+            시뮬레이션 샌드박스 ↗
           </Link>
         </Card>
       </div>

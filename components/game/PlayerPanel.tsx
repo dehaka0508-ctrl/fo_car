@@ -23,14 +23,14 @@ export function PlayerPanel({ game, onOpen }: { game: GameState; onOpen: (modal:
   const rival = game.rival ? game.npcs[game.rival.npcId] : null;
 
   return (
-    <section className="px-panel m-[3px] flex min-h-0 flex-col gap-3 p-3">
+    <section className="px-panel player-panel flex min-h-0 flex-col gap-5 p-5">
       <div className="flex items-end gap-3 lg:flex-col lg:items-stretch">
         <PlayerStage className="lg:w-full">
           <Avatar appearance={player.profile.appearance} kit={club?.kitColors} size={129} ball idle />
         </PlayerStage>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-xl font-bold text-zinc-50 drop-shadow-[2px_2px_0_#05080f]">{player.profile.name}</h1>
+            <h1 className="truncate text-xl font-bold text-zinc-50">{player.profile.name}</h1>
             <Tag tone="emerald">OVR {player.ovr}</Tag>
           </div>
           <p className="truncate text-[11px] text-zinc-400">

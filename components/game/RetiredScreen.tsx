@@ -30,7 +30,7 @@ export function RetiredScreen({ game }: { game: GameState }) {
         </PlayerStage>
         <div className="flex-1">
           <p className="font-pixel text-xs font-bold text-emerald-400">FULL TIME · 현역 은퇴</p>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-50 drop-shadow-[2px_2px_0_#05080f]">{player.profile.name}</h1>
+          <h1 className="mt-1 text-2xl font-bold text-zinc-50">{player.profile.name}</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             {summary?.age ?? player.age}세 은퇴 · {player.profile.startSeason}–{summary?.season ?? game.turn.season} ·{' '}
             {(summary?.clubs ?? []).map((id) => clubLabel(id)).join(' → ')}

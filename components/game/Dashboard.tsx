@@ -42,7 +42,7 @@ function CareerMenu({ game, onDone }: { game: GameState; onDone: () => void }) {
   const retire = useGameStore((s) => s.retire);
   const reset = useGameStore((s) => s.reset);
   return (
-    <div className="mt-4 flex justify-end gap-2 border-t-2 border-dashed border-zinc-700 pt-3">
+    <div className="mt-4 flex justify-end gap-2 border-t border-zinc-700 pt-3">
       {canRetire(game) ? (
         <Button
           variant="danger"
@@ -101,9 +101,9 @@ function DesktopDashboard({ game, onOpen }: { game: GameState; onOpen: (modal: D
   const step = useGameStore((s) => s.step);
   const goStep = useGameStore((s) => s.goStep);
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-[1680px] flex-col gap-3 px-3 pb-3">
+    <div className="game-shell">
       <GameTopBar game={game} step={step} onStep={goStep} />
-      <div className="grid min-h-0 flex-1 grid-cols-[272px_minmax(0,1fr)_360px] gap-3">
+      <div className="game-grid">
         <PlayerPanel game={game} onOpen={(m) => onOpen(m)} />
         <StepPanel game={game} step={step} />
         <TurnResultPanel game={game} />
@@ -121,14 +121,14 @@ export function StepPanel({ game, step, compact = false }: { game: GameState; st
   const meta = STEP_META[step];
 
   return (
-    <section className={cx('px-panel m-[3px] flex min-h-0 flex-col', compact && 'flex-1')}>
+    <section className={cx('px-panel flex min-h-0 flex-col', compact && 'flex-1')}>
       <header
         className={cx(
-          'flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-dashed border-zinc-700',
-          compact ? 'px-3 py-2' : 'px-4 py-3',
+          'flex flex-wrap items-baseline justify-between gap-2 border-b border-zinc-700',
+          compact ? 'px-3 py-2' : 'px-5 py-4',
         )}
       >
-        <h2 className="text-sm font-bold text-amber-300 drop-shadow-[2px_2px_0_#05080f]">
+        <h2 className="text-base font-semibold text-zinc-50">
           {FLOW_STEPS.indexOf(step) + 1}. {meta.title}
         </h2>
         <span className="text-[11px] text-zinc-400">{meta.hint}</span>
@@ -153,10 +153,10 @@ export function StepPanel({ game, step, compact = false }: { game: GameState; st
         </div>
       ) : null}
 
-      <div className={cx('min-h-0 flex-1 overflow-y-auto', compact ? 'px-3 py-2' : 'px-4 py-3')}>{STEP_BODY[step](game)}</div>
+      <div className={cx('step-content min-h-0 flex-1 overflow-y-auto', compact ? 'px-3 py-2' : 'px-5 py-4')}>{STEP_BODY[step](game)}</div>
 
       {meta.skip ? (
-        <footer className={cx('flex justify-end border-t-2 border-dashed border-zinc-700', compact ? 'px-3 py-1.5' : 'px-4 py-2')}>
+        <footer className={cx('flex justify-end border-t border-zinc-700', compact ? 'px-3 py-1.5' : 'px-4 py-2')}>
           <Button onClick={skipStep}>{meta.skip} ▶</Button>
         </footer>
       ) : null}
