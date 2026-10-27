@@ -15,7 +15,7 @@ import { DATABASE } from '@/data/database';
 import type { GameState, HighlightOutcome, TurnPhase, TurnPointer, TurnResult } from '@/types/game';
 import { createPlayer, type CharacterInput } from './character';
 import { syncSaveWithDatabase } from './dbSync';
-import { applyMatchExperience, applyTurnGrowth } from './growth';
+import { developPlayerDuringTurn } from './growth';
 import { buildAutoHighlightOutcome } from './highlight';
 import { beginInterTurn, interTurnBlockers } from './interTurn';
 import { simulateFirstHalfTable } from './league';
@@ -206,9 +206,9 @@ function applyTurnResult(state: GameState, world: SimulationWorld, result: TurnR
   };
 
   // 출전 경험 성장 + 매 턴 자연 성장 (포텐셜까지)
-  const experience = applyMatchExperience(next.player, result.playerStats, rng);
-  const natural = applyTurnGrowth(experience.player, rng);
-  next = { ...next, player: natural.player };
+  const development = developPlayerDuringTurn(next.player, result.playerStats, rng, state.seed, player.condition);
+  const developedResult: TurnResult = { ...result, development: development.report };
+  next = { ...next, player: development.player, lastTurn: developedResult, seasonTurns: [...state.seasonTurns, developedResult] };
 
   next = applyTurnToCareer(next, result);
   next = applyTurnNarrative(next, result);

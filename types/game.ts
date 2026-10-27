@@ -712,7 +712,21 @@ export interface TrophyWin {
   teamKind: 'CLUB' | 'NATION';
 }
 
+export interface TurnDevelopmentReport {
+  ovrBefore: number;
+  ovrAfter: number;
+  averageBefore: number;
+  averageAfter: number;
+  minutes: number;
+  rating: number | null;
+  condition: number;
+  changes: Array<{ key: AttributeKey; before: number; after: number; experience: number; natural: number }>;
+  status: 'GROWN' | 'AT_POTENTIAL' | 'ACCUMULATING' | 'AGE_LIMIT';
+}
+
 export interface TurnResult {
+  /** 이번 턴 경기 경험·자연 성장. 이전 세이브에는 없을 수 있다. */
+  development?: TurnDevelopmentReport;
   /** 해당 턴을 실제로 치른 포지션 (포지션 변경 후에도 성적 구분 유지). */
   playerPosition?: Position;
   turn: TurnPointer;
@@ -970,6 +984,8 @@ export interface ClubSpell {
 }
 
 export interface PlayerState {
+  /** 소수점 성장 누적 및 능력치별 배분 잔액. 정수 상승에 사용한 몫은 차감한다. */
+  developmentCredits?: Partial<Record<AttributeKey, number>>;
   /** 약발 숙련도 0~100. 필드 능력치 평균에는 포함하지 않는다. */
   weakFoot: number;
   profile: PlayerProfile;
@@ -977,7 +993,7 @@ export interface PlayerState {
   /** 벌크업/감량으로 변동 */
   weightKg: number;
   attributes: Attributes;
-  /** 현재 포지션·스타일 기준 OVR (캐시) */
+  /** 현재 포지션 기준 OVR (캐시) */
   ovr: number;
   /** 숨은 성장 한도: 필드 선수는 18개 필드 능력치의 단순 평균(60~100), GK는 기존 최대 OVR(80~100). 화면에는 보이지 않는다 */
   potential: number;

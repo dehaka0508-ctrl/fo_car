@@ -3,6 +3,7 @@ import { TURN_PHASE_LABELS } from '@/data/labels';
 import { mergeStatLines, averageRating, passAccuracy } from '@/engine/simulator';
 import type { CompetitionType, GameState, PlayerStatLine } from '@/types/game';
 import { clubLabel, competitionName, ratingText, seasonLabel } from './format';
+import { TurnGrowth } from './TurnGrowth';
 import { Card, cx, Stat, Tag } from './ui';
 
 const COMPETITION_LABELS: Record<CompetitionType, string> = {
@@ -37,6 +38,7 @@ export function TurnSummary({ game }: { game: GameState }) {
         <p className="eyebrow">TURN REVIEW</p>
         <h3 className="mt-1 text-xl font-semibold text-zinc-50">{seasonLabel(turn.turn.season)} {TURN_PHASE_LABELS[turn.turn.phase]}</h3>
         <p className="mt-1 text-xs text-zinc-400">{game.player.profile.name} · {turn.playerPosition ?? game.player.profile.role.position} · 이번 턴 전체 대회 합산 · {total.minutes}분 출전</p>
+        {turn.development ? <p className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-300">이번 턴 성장 · OVR {turn.development.ovrBefore} → {turn.development.ovrAfter}{turn.development.changes.length ? ` · 능력치 ${turn.development.changes.length}개 상승` : ' · 성장 내역 확인'}</p> : null}
         <div className={cx('mt-5 grid grid-cols-2 gap-5', isMidfielder ? 'sm:grid-cols-3' : 'sm:grid-cols-4')}>
           <Stat label="출전 경기" value={total.appearances} sub={`선발 ${total.starts}회`} accent />
           <Stat label={firstLabel} value={value(total, firstStat)} accent />
@@ -47,6 +49,7 @@ export function TurnSummary({ game }: { game: GameState }) {
         {isDefender ? <p className="mt-3 text-xs text-zinc-300">공격 기여 · {total.goals}골 {total.assists}도움</p> : null}
       </div>
 
+      <TurnGrowth report={turn.development} isGoalkeeper={isGK} />
       <Card title="대회별 개인 성적">
         {played.length ? <div className="overflow-x-auto"><table className={cx('w-full text-right text-xs tabular-nums', isMidfielder ? 'min-w-[480px]' : 'min-w-[280px]')}>
           <thead className="text-zinc-400"><tr><th className="pb-3 text-left font-medium">대회</th><th className="pb-3 font-medium">출전</th><th className="pb-3 font-medium">{firstLabel}</th><th className="pb-3 font-medium">{secondLabel}</th>{isMidfielder ? <><th className="pb-3 font-medium">패스 성공률</th><th className="pb-3 font-medium">키패스</th></> : null}<th className="pb-3 font-medium">평점</th></tr></thead>

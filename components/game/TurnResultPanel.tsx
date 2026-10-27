@@ -9,6 +9,7 @@ import { turnLabel } from '@/engine/state';
 import { kitColorsFor } from '@/engine/world';
 import type { CompetitionType, GameState, NoticeKind, PlayerStatLine, SeasonRecord, TeamRecord, TurnResult } from '@/types/game';
 import { competitionName, ratingText, seasonLabel } from './format';
+import { TurnGrowth } from './TurnGrowth';
 import { cx, signed, Tag } from './ui';
 
 const CLUB_TYPES: CompetitionType[] = ['LEAGUE', 'DOMESTIC_CUP', 'CONTINENTAL'];
@@ -86,7 +87,7 @@ export function TurnResultPanel({ game }: { game: GameState }) {
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      <section className="px-panel flex min-h-0 flex-1 flex-col gap-4 p-4">
+      <section className="px-panel flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         {turn ? <LastTurn turn={turn} game={game} isGK={isGK} /> : <NoTurnYet />}
         <TurnHistory game={game} isGK={isGK} />
       </section>
@@ -150,6 +151,7 @@ function LastTurn({ turn, game, isGK }: { turn: TurnResult; game: GameState; isG
         <Tile label="평점" value={ratingText(rating)} tone={ratingTone(rating)} />
       </div>
       {midfielder ? <div className="grid grid-cols-2 gap-2"><Tile label="패스 성공률" value={passAccuracy(line) === null ? '-' : `${passAccuracy(line)!.toFixed(1)}%`} sub={`${line.passesCompleted ?? 0}/${line.passesAttempted ?? 0}`} /><Tile label="키패스" value={line.keyPasses} /></div> : null}
+      <TurnGrowth report={turn.development} isGoalkeeper={isGK} compact />
       <p className="text-xs text-zinc-200">
         {team ? (
           <>
