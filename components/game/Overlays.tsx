@@ -42,7 +42,7 @@ function CeremonyStage({ ceremony }: { ceremony: Ceremony }) {
           label={isWorld ? `${player.profile.name} (턱시도)` : player.profile.name}
         />
       </PlayerStage>
-      <p className={cx('text-sm text-zinc-200', trophy && 'font-pixel text-base font-bold text-amber-300 drop-shadow-[2px_2px_0_#05080f]')}>{caption}</p>
+      <p className={cx('text-sm text-zinc-200', trophy && 'font-pixel text-base font-bold text-amber-300')}>{caption}</p>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { TransferStep } from './steps/TransferStep';
 import { RecordsTab } from './tabs/RecordsTab';
 import { PlayerTab } from './tabs/PlayerTab';
 import { MobileDashboard } from './MobileDashboard';
+import { TurnSummary } from './TurnSummary';
 import { TurnResultPanel } from './TurnResultPanel';
 import { Button, cx, Modal, Tag } from './ui';
 import { useIsDesktop } from './useIsDesktop';
@@ -35,14 +36,14 @@ const STEP_BODY: Record<FlowStep, (game: GameState) => ReactNode> = {
   TRANSFER: (game) => <TransferStep game={game} />,
 };
 
-export type DashboardModal = null | 'player' | 'records';
+export type DashboardModal = null | 'player' | 'records' | 'turn';
 
 /** 은퇴 · 세이브 삭제 (휴대폰에서는 선수 정보 창 아래에만 있다) */
 function CareerMenu({ game, onDone }: { game: GameState; onDone: () => void }) {
   const retire = useGameStore((s) => s.retire);
   const reset = useGameStore((s) => s.reset);
   return (
-    <div className="mt-4 flex justify-end gap-2 border-t-2 border-dashed border-zinc-700 pt-3">
+    <div className="mt-4 flex justify-end gap-2 border-t border-zinc-700 pt-3">
       {canRetire(game) ? (
         <Button
           variant="danger"
@@ -71,13 +72,21 @@ function CareerMenu({ game, onDone }: { game: GameState; onDone: () => void }) {
   );
 }
 
-/** 게임 메인 화면: PC(가로 16:9)와 휴대폰(세로 9:16) 배치를 따로 그린다. 둘 다 한 화면에 들어가고 페이지는 스크롤되지 않는다 */
+/** 핵심 행동을 중앙에 두고 상세 기록은 필요할 때 펼친다. */
 export function Dashboard({ game }: { game: GameState }) {
   const desktop = useIsDesktop();
   const [modal, setModal] = useState<DashboardModal>(null);
+  const showTurnReport = useGameStore((s) => s.showTurnReport);
+  const dismissTurnReport = useGameStore((s) => s.dismissTurnReport);
   return (
     <>
       {desktop ? <DesktopDashboard game={game} onOpen={setModal} /> : <MobileDashboard game={game} onOpen={setModal} />}
+      {(showTurnReport || modal === 'turn') && game.lastTurn ? (
+        <Modal title="턴 결과" onClose={() => { dismissTurnReport(); setModal(null); }}>
+          <TurnSummary game={game} />
+          <div className="report-confirm"><Button className="w-full py-3.5 text-sm" variant="primary" onClick={() => { dismissTurnReport(); setModal(null); }}>확인하고 계속하기 →</Button></div>
+        </Modal>
+      ) : null}
       {modal === 'player' ? (
         <Modal wide title="선수 정보" onClose={() => setModal(null)}>
           <PlayerTab game={game} />
@@ -94,19 +103,20 @@ export function Dashboard({ game }: { game: GameState }) {
 }
 
 /**
- * PC (16:9 한 화면)
- *  왼쪽: 선수 카드 / 가운데: 지금 단계 (경기 → 사건 → 훈련 → 상점 → 이적) / 오른쪽: 턴 성적 · 턴별 기록 · 소식
+ * PC: 선수 카드를 보조 열에 두고 현재 행동과 펼칠 수 있는 기록을 중앙에 배치한다.
  */
 function DesktopDashboard({ game, onOpen }: { game: GameState; onOpen: (modal: DashboardModal) => void }) {
   const step = useGameStore((s) => s.step);
   const goStep = useGameStore((s) => s.goStep);
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-[1680px] flex-col gap-3 px-3 pb-3">
+    <div className="game-shell">
       <GameTopBar game={game} step={step} onStep={goStep} />
-      <div className="grid min-h-0 flex-1 grid-cols-[272px_minmax(0,1fr)_360px] gap-3">
+      <div className="game-grid">
         <PlayerPanel game={game} onOpen={(m) => onOpen(m)} />
-        <StepPanel game={game} step={step} />
-        <TurnResultPanel game={game} />
+        <main className="flex min-w-0 flex-col gap-5">
+          <StepPanel game={game} step={step} />
+          <details className="career-details"><summary>지난 성적 · 턴별 기록 · 소식</summary><div className="pt-4"><TurnResultPanel game={game} /></div></details>
+        </main>
       </div>
     </div>
   );
@@ -121,17 +131,17 @@ export function StepPanel({ game, step, compact = false }: { game: GameState; st
   const meta = STEP_META[step];
 
   return (
-    <section className={cx('px-panel m-[3px] flex min-h-0 flex-col', compact && 'flex-1')}>
+    <section className={cx('px-panel flex min-h-0 flex-col', compact && 'flex-1')}>
       <header
         className={cx(
-          'flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-dashed border-zinc-700',
-          compact ? 'px-3 py-2' : 'px-4 py-3',
+          'flex flex-wrap items-baseline justify-between gap-2 border-b border-zinc-700',
+          compact ? 'px-3 py-2' : 'px-5 py-4',
         )}
       >
-        <h2 className="text-sm font-bold text-amber-300 drop-shadow-[2px_2px_0_#05080f]">
+        <h2 className="text-xl font-semibold text-zinc-50">
           {FLOW_STEPS.indexOf(step) + 1}. {meta.title}
         </h2>
-        <span className="text-[11px] text-zinc-400">{meta.hint}</span>
+        
       </header>
 
       {message ? (
@@ -153,10 +163,10 @@ export function StepPanel({ game, step, compact = false }: { game: GameState; st
         </div>
       ) : null}
 
-      <div className={cx('min-h-0 flex-1 overflow-y-auto', compact ? 'px-3 py-2' : 'px-4 py-3')}>{STEP_BODY[step](game)}</div>
+      <div className={cx('step-content min-h-0 flex-1', compact ? 'px-3 py-2' : 'px-5 py-4')}>{STEP_BODY[step](game)}</div>
 
       {meta.skip ? (
-        <footer className={cx('flex justify-end border-t-2 border-dashed border-zinc-700', compact ? 'px-3 py-1.5' : 'px-4 py-2')}>
+        <footer className={cx('flex justify-end border-t border-zinc-700', compact ? 'px-3 py-1.5' : 'px-4 py-2')}>
           <Button onClick={skipStep}>{meta.skip} ▶</Button>
         </footer>
       ) : null}

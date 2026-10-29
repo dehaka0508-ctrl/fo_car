@@ -47,7 +47,6 @@ export function canPurchase(
   alreadyPurchasedThisTurn: boolean,
 ): PurchaseCheck {
   if (alreadyPurchasedThisTurn) return { ok: false, reason: '이번 턴에는 이미 물건을 샀습니다.' };
-  if (player.inventory.some((owned) => owned.itemId === item.id)) return { ok: false, reason: '이미 가지고 있습니다.' };
   if (player.money < item.price) return { ok: false, reason: '돈이 부족합니다.' };
   return { ok: true };
 }

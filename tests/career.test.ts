@@ -13,7 +13,7 @@ import {
   worldOf,
 } from '@/engine/career';
 import type { CharacterInput } from '@/engine/character';
-import { resolveEvent, rollEvents } from '@/engine/events';
+import { eventTurnIndex, isEventAvailable, resolveEvent, rollEvents } from '@/engine/events';
 import { buildHighlightScene, resolveSituationChoice } from '@/engine/highlight';
 import { beginInterTurn, buyInterTurn, seasonStartCondition, shopOffers, trainInterTurn } from '@/engine/interTurn';
 import { rngFor } from '@/engine/rng';
@@ -197,12 +197,13 @@ describe('풀 커리어 루프', () => {
     }
   });
 
-  it('시즌마다 시상식이 열리고 시즌 기록이 남는다', () => {
+  it('시즌마다 기록과 평점이 남고 수상 기록의 시즌도 유효하다', () => {
     const state = careers[0];
     const seasons = state.history.map((s) => s.season);
     expect(seasons).toEqual([...seasons].sort((a, b) => a - b));
     expect(state.history.every((s) => s.ratings !== undefined)).toBe(true);
-    expect(state.awards.some((a) => a.type === 'BALLON_DOR' || a.type === 'LEAGUE_BEST_XI' || a.type === 'NATIONAL_POTY')).toBe(true);
+    expect(state.history.length).toBeGreaterThan(10);
+    expect(state.awards.every((award) => seasons.includes(award.season))).toBe(true);
   });
 
   it('세이브(JSON)로 저장했다가 이어서 진행할 수 있다', () => {
@@ -219,5 +220,47 @@ describe('풀 커리어 루프', () => {
       const initial = Object.values(BASE_WORLD.clubs).filter((c) => c.leagueId === league.id).length;
       expect(count(league.id)).toBe(initial);
     }
+  });
+});
+
+
+describe('재구매와 사건 재발 제한', () => {
+  it('같은 물건이 다시 진열되고 다음 턴 재구매되지만 턴당 1회 제한은 유지된다', () => {
+    const base = createCareer(input(), { seed: 7 });
+    const rich = { ...base, player: { ...base.player, money: 50_000_000 } };
+    const item = shopOffers(rich)[0];
+    const first = buyInterTurn(rich, item.id);
+    expect(() => buyInterTurn(first, item.id)).toThrow('이미');
+    // 과거 구매 이력이 있어도 같은 시드의 진열에서 제외되지 않는다.
+    const next = { ...first, player: { ...first.player, money: rich.player.money }, interTurn: { ...first.interTurn, purchasedItemId: null } };
+    expect(shopOffers(next).map((offer) => offer.id)).toEqual(shopOffers(rich).map((offer) => offer.id));
+    expect(new Set(shopOffers(next).map((offer) => offer.id)).size).toBe(3);
+    const second = buyInterTurn(next, item.id);
+    expect(second.player.inventory.filter((owned) => owned.itemId === item.id)).toHaveLength(2);
+    expect(second.player.money).toBe(next.player.money - item.price);
+  });
+
+  it('입원 사건을 발생 시점에 기록하고 저장·복원 후에도 12턴 간격과 최대 2회를 지킨다', () => {
+    let rolled: GameState | undefined;
+    for (let seed = 1; seed <= 500; seed++) {
+      const base = createCareer(input(), { seed });
+      const state = beginInterTurn(base, worldOf(base), 'FIRST_HALF');
+      if (state.events.some((event) => event.definitionId === 'family-hospital')) { rolled = state; break; }
+    }
+    expect(rolled).toBeDefined();
+    const state = JSON.parse(JSON.stringify(rolled)) as GameState;
+    const history = state.eventHistory!['family-hospital'];
+    expect(history).toEqual({ count: 1, lastTurn: eventTurnIndex(state) });
+    const def = GAME_EVENT_MAP['family-hospital'];
+    for (let turns = 0; turns < 12; turns++) {
+      const index = eventTurnIndex(state) + turns;
+      const phases = ['FIRST_HALF', 'SECOND_HALF', 'PRESEASON'] as const;
+      const later = { ...state, turn: { ...state.turn, season: Math.floor(index / 3), phase: phases[index % 3] } };
+      expect(isEventAvailable(def, later, 'FIRST_HALF')).toBe(false);
+    }
+    const eligible = { ...state, turn: { ...state.turn, season: state.turn.season + 4 } };
+    expect(isEventAvailable(def, eligible, 'FIRST_HALF')).toBe(true);
+    expect(isEventAvailable(def, { ...eligible, eventHistory: { 'family-hospital': { count: 2, lastTurn: history.lastTurn } } }, 'FIRST_HALF')).toBe(false);
+    expect(isEventAvailable(def, { ...eligible, eventHistory: undefined }, 'FIRST_HALF')).toBe(false);
   });
 });

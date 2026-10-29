@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { PixelBall } from '@/components/pixel/PixelIcons';
 import { PlayerStage } from '@/components/pixel/PlayerStage';
+import { getPositionGroup } from '@/data/playstyles';
 import { TURN_PHASE_LABELS } from '@/data/labels';
 import { BASE_WORLD } from '@/engine/career';
-import { averageRating } from '@/engine/simulator';
+import { averageRating, passAccuracy } from '@/engine/simulator';
 import { turnLabel } from '@/engine/state';
 import { useGameStore } from '@/store/gameStore';
 import { FLOW_LABELS, FLOW_STEPS, stepStatus } from '@/store/flow';
@@ -17,7 +18,7 @@ import { turnHeadline, TurnResultPanel } from './TurnResultPanel';
 import { cx, Tag } from './ui';
 
 /**
- * 휴대폰 세로 화면 (9:16 한 화면, 페이지 스크롤 없음)
+ * 휴대폰: 요약을 위에 두고 본문은 자연스럽게 스크롤한다.
  *  위: 선수 한 줄 · 지난 턴 성적 한 줄 · 단계 표시 / 아래: 지금 단계 (또는 성적 자세히)
  */
 export function MobileDashboard({ game, onOpen }: { game: GameState; onOpen: (modal: DashboardModal) => void }) {
@@ -26,20 +27,20 @@ export function MobileDashboard({ game, onOpen }: { game: GameState; onOpen: (mo
   const [view, setView] = useState<'step' | 'result'>('step');
 
   return (
-    <div className="flex h-dvh flex-col gap-1.5 px-2 py-2">
+    <div className="mobile-shell">
       <header className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <PixelBall size={18} />
-          <span className="font-pixel text-[11px] font-bold text-amber-300 drop-shadow-[1px_1px_0_#05080f]">FOOTBALL CAREER</span>
+          <span className="font-pixel text-[11px] font-bold text-zinc-100">FOOTBALL CAREER</span>
         </div>
         <span className="px-inset font-pixel m-[2px] px-2 py-0.5 text-[11px] text-amber-300">{turnLabel(game.turn)}</span>
       </header>
 
       <PlayerStrip game={game} onOpen={onOpen} />
-      <TurnStrip game={game} open={view === 'result'} onToggle={() => setView((v) => (v === 'result' ? 'step' : 'result'))} />
+      <TurnStrip game={game} open={false} onToggle={() => onOpen('turn')} />
 
       <nav aria-label="턴 진행 단계">
-        <ol className="grid grid-cols-5 gap-1">
+        <ol className="step-nav grid grid-cols-5 gap-1">
           {FLOW_STEPS.map((s, i) => {
             const status = stepStatus(game, s);
             const active = s === step && view === 'step';
@@ -54,7 +55,7 @@ export function MobileDashboard({ game, onOpen }: { game: GameState; onOpen: (mo
                   aria-current={active ? 'step' : undefined}
                   className={cx(
                     'px-btn font-pixel m-[2px] flex w-[calc(100%-4px)] items-center justify-center gap-1 py-1.5 text-[11px] font-bold',
-                    active ? 'bg-amber-400 text-zinc-950' : status === 'done' ? 'bg-emerald-800 text-emerald-100' : status === 'empty' ? 'bg-zinc-900 text-zinc-500' : 'bg-zinc-800 text-zinc-100',
+                    active ? 'bg-emerald-400 text-zinc-950' : status === 'done' ? 'bg-emerald-800 text-emerald-100' : status === 'empty' ? 'bg-zinc-900 text-zinc-500' : 'bg-zinc-800 text-zinc-100',
                   )}
                 >
                   {status === 'done' && !active ? '✓' : i + 1}
@@ -88,9 +89,10 @@ function PlayerStrip({ game, onOpen }: { game: GameState; onOpen: (modal: Dashbo
     ['멘탈', player.mental],
     ['명성', player.reputation],
     ['입지', player.squad.standing],
+    ['약발', player.weakFoot ?? 40],
   ];
   return (
-    <section className="px-panel m-[3px] flex gap-2 p-2">
+    <section className="px-panel flex gap-3 p-3">
       <PlayerStage className="px-1.5 pt-1.5">
         <Avatar appearance={player.profile.appearance} kit={club?.kitColors} size={86} idle />
       </PlayerStage>
@@ -138,11 +140,14 @@ function TurnStrip({ game, open, onToggle }: { game: GameState; open: boolean; o
   const { line, label } = turnHeadline(turn);
   const rating = averageRating(line);
   const position = turn.leagueTable.find((r) => r.clubId === turn.clubId)?.position;
-  const isGK = game.player.profile.role.position === 'GK';
+  const group = getPositionGroup(turn.playerPosition ?? game.player.profile.role.position);
+  const isGK = group === 'GOALKEEPER';
+  const defender = group === 'DEFENDER';
+  const midfielder = group === 'MIDFIELDER';
   const cells: Array<[string, string | number, string?]> = [
     ['경기', line.appearances],
-    [isGK ? 'CS' : '골', isGK ? line.cleanSheets : line.goals, 'text-amber-300'],
-    ['도움', line.assists, 'text-emerald-300'],
+    [isGK ? '선방' : defender ? '태클' : midfielder ? '패스' : '골', isGK ? line.saves : defender ? line.tackles ?? 0 : midfielder ? (passAccuracy(line) === null ? '-' : `${passAccuracy(line)!.toFixed(0)}%`) : line.goals, 'text-amber-300'],
+    [isGK || defender ? 'CS' : midfielder ? '키패스' : '도움', isGK || defender ? line.cleanSheets : midfielder ? line.keyPasses : line.assists, 'text-emerald-300'],
     ['평점', ratingText(rating), rating !== null && rating >= 7 ? 'text-amber-300' : 'text-zinc-50'],
     ['순위', position ?? '-'],
   ];
@@ -156,7 +161,7 @@ function TurnStrip({ game, open, onToggle }: { game: GameState; open: boolean; o
         {cells.map(([name, value, tone]) => (
           <div key={name} className="flex flex-col items-center leading-tight">
             <span className={cx('font-pixel text-base', tone ?? 'text-zinc-50')}>{value}</span>
-            <span className="text-[9px] text-zinc-500">{name}</span>
+            <span className="text-[11px] text-zinc-400">{name}</span>
           </div>
         ))}
       </div>

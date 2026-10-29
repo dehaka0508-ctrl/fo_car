@@ -14,6 +14,7 @@ const KIND_LABELS: Record<PlanKind, { label: string; hint: string }> = {
   CATEGORY: { label: '영역', hint: '큰 영역 1개(세부 3개)를 고르게 조금씩 올립니다.' },
   BULK_UP: { label: '벌크업', hint: '몸무게↑ 몸싸움·제공권↑ / 가속력·민첩성↓' },
   CUT: { label: '감량', hint: '몸무게↓ 가속력·민첩성↑ / 몸싸움·제공권↓' },
+  WEAK_FOOT: { label: '약발', hint: '약발 숙련도 +3 · 체력 -8' },
   REST: { label: '휴식', hint: '체력을 회복하고 멘탈을 다잡습니다.' },
 };
 
@@ -29,7 +30,7 @@ function Segment<T extends string>({ value, options, onChange }: { value: T; opt
           onClick={() => onChange(key)}
           className={cx(
             'px-btn m-[2px] px-3 py-1.5 text-xs font-bold',
-            value === key ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700',
+            value === key ? 'bg-emerald-400 text-zinc-950' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700',
           )}
         >
           {label}
@@ -62,6 +63,7 @@ export function TrainingStep({ game }: { game: GameState }) {
               {ATTRIBUTE_META[key as AttributeKey].label} {signed(delta ?? 0)}
             </Tag>
           ))}
+          {done.weakFootDelta !== undefined ? <Tag tone="emerald">약발 +{done.weakFootDelta}</Tag> : null}
           <Tag tone={done.conditionDelta >= 0 ? 'emerald' : 'amber'}>체력 {signed(done.conditionDelta)}</Tag>
         </div>
       </div>
@@ -69,7 +71,7 @@ export function TrainingStep({ game }: { game: GameState }) {
   }
 
   const plan: TrainingPlan =
-    kind === 'REST' ? { kind } : kind === 'CATEGORY' ? { kind, category, intensity } : kind === 'FOCUSED' ? { kind, attributes: focused, intensity } : { kind, intensity };
+    kind === 'REST' || kind === 'WEAK_FOOT' ? { kind } : kind === 'CATEGORY' ? { kind, category, intensity } : kind === 'FOCUSED' ? { kind, attributes: focused, intensity } : { kind, intensity };
   const invalid = validateTrainingPlan(plan);
   const preview = invalid ? null : previewTraining(player, plan);
   const groups: Array<[AttributeGroup, readonly AttributeKey[]]> = [
@@ -82,26 +84,23 @@ export function TrainingStep({ game }: { game: GameState }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <Segment value={kind} onChange={setKind} options={(Object.keys(KIND_LABELS) as PlanKind[]).map((k) => [k, KIND_LABELS[k].label])} />
-        <p className="text-[11px] text-zinc-400">{KIND_LABELS[kind].hint}</p>
+        <Segment value={kind === 'CATEGORY' ? 'FOCUSED' : kind} onChange={setKind} options={(Object.keys(KIND_LABELS) as PlanKind[]).filter((k) => k !== 'CATEGORY').map((k) => [k, KIND_LABELS[k].label])} />
+        <p className="text-[11px] text-zinc-400">{kind === 'FOCUSED' || kind === 'CATEGORY' ? '카테고리를 누르면 해당 영역 전체를, 능력치를 누르면 2~3개를 직접 고릅니다.' : KIND_LABELS[kind].hint}</p>
       </div>
 
       {kind === 'FOCUSED' || kind === 'CATEGORY' ? (
         <div className="grid grid-cols-3 gap-x-3 gap-y-2 xl:grid-cols-6">
           {groups.map(([group, keys]) => (
             <div key={group}>
-              {kind === 'CATEGORY' ? (
-                <button
+              <button
                   type="button"
-                  onClick={() => setCategory(group)}
-                  className={cx('px-focus mb-1 text-[11px] font-bold', category === group ? 'text-amber-300' : 'text-emerald-300 hover:text-emerald-200')}
+                  onClick={() => { setCategory(group); setKind('CATEGORY'); }}
+                  aria-pressed={kind === 'CATEGORY' && category === group}
+                  className={cx('px-focus mb-1 text-[11px] font-bold', kind === 'CATEGORY' && category === group ? 'text-amber-300' : 'text-emerald-300 hover:text-emerald-200')}
                 >
-                  {category === group ? '▶ ' : ''}
+                  {kind === 'CATEGORY' && category === group ? '✓ ' : ''}
                   {ATTRIBUTE_GROUP_LABELS[group]}
                 </button>
-              ) : (
-                <p className="mb-1 text-[11px] font-bold text-emerald-300">{ATTRIBUTE_GROUP_LABELS[group]}</p>
-              )}
               <div className="flex flex-col gap-1">
                 {keys.map((key) => {
                   const on = kind === 'FOCUSED' ? focused.includes(key) : category === group;
@@ -109,7 +108,14 @@ export function TrainingStep({ game }: { game: GameState }) {
                     <button
                       key={key}
                       type="button"
-                      onClick={() => (kind === 'FOCUSED' ? toggle(key) : setCategory(group))}
+                      aria-pressed={on}
+                      onClick={() => {
+                        if (kind === 'CATEGORY') {
+                          const selected: readonly AttributeKey[] = category === 'GOALKEEPING' ? GOALKEEPING_ATTRIBUTES : CATEGORY_ATTRIBUTES[category];
+                          setFocused(selected.includes(key) ? selected.filter((k) => k !== key).slice(0, 3) : [...selected.slice(0, 2), key]);
+                          setKind('FOCUSED');
+                        } else toggle(key);
+                      }}
                       className={cx(
                         'px-focus flex items-center justify-between gap-1 px-1.5 py-1 text-left text-[11px]',
                         on ? 'bg-emerald-900/70 text-zinc-50 shadow-[inset_0_0_0_1px_#44d17a]' : 'bg-zinc-950/60 text-zinc-300 hover:bg-zinc-800',
@@ -129,7 +135,7 @@ export function TrainingStep({ game }: { game: GameState }) {
         </div>
       ) : null}
 
-      {kind !== 'REST' ? (
+      {kind !== 'REST' && kind !== 'WEAK_FOOT' ? (
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-zinc-400">강도</span>
           <Segment value={intensity} onChange={setIntensity} options={(Object.keys(INTENSITY_LABELS) as TrainingIntensity[]).map((i) => [i, INTENSITY_LABELS[i]])} />
@@ -140,6 +146,7 @@ export function TrainingStep({ game }: { game: GameState }) {
         <span className="mr-1 text-zinc-400">예상</span>
         {preview ? (
           <>
+            {preview.weakFootDelta !== undefined ? <Tag tone="emerald">약발 +{preview.weakFootDelta}</Tag> : null}
             {Object.entries(preview.gains).map(([key, gain]) => (
               <Tag key={key} tone={(gain ?? 0) >= 0 ? 'emerald' : 'rose'}>
                 {ATTRIBUTE_META[key as AttributeKey].label} {signed(gain ?? 0, 1)}
@@ -157,7 +164,7 @@ export function TrainingStep({ game }: { game: GameState }) {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="primary" className="px-6 py-2.5" disabled={Boolean(invalid)} onClick={() => train(plan)}>
+        <Button variant="primary" className="w-full px-6 py-3 text-sm sm:w-auto" disabled={Boolean(invalid)} onClick={() => train(plan)}>
           {kind === 'REST' ? '휴식하기' : '훈련하기'}
         </Button>
         {player.growthFocus ? (

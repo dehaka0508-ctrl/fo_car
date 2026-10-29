@@ -13,7 +13,7 @@ interface AvatarProps {
   outfit?: AvatarOutfit;
   /** 손에 든 트로피 */
   trophy?: AvatarTrophy | null;
-  /** 높이(px). 도트가 고르게 보이도록 43px(도트 1줄 = 1px) 단위로 맞춘다 */
+  /** 높이(px). 도트가 고르게 보이도록 32px(도트 1줄 = 1px) 단위로 맞춘다 */
   size?: number;
   /** 발밑에 공 (유니폼일 때) */
   ball?: boolean;
@@ -24,7 +24,7 @@ interface AvatarProps {
 }
 
 /**
- * 3등신 도트 선수 (전신). 피부·머리·눈동자 색과 유니폼 색(kitColors)을 입힌다.
+ * 머리가 큰 2등신 도트 선수 (전신). 피부·머리·눈동자 색과 유니폼 색(kitColors)을 입힌다.
  * - 평소: 소속팀 유니폼 / 국가대표 경기: 국가대표 유니폼 (kit)
  * - 발롱도르·FIFA 시상식: 턱시도 + 트로피 (outfit, trophy)
  */

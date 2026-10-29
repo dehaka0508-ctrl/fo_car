@@ -12,6 +12,7 @@
  *  - 새 시즌 시작 체력 (프리시즌 휴식 + 대표팀 미차출 → 100), 다음 시즌으로 이동
  */
 import type {
+  AttributeKey,
   ClubState,
   CompetitionType,
   GameState,
@@ -21,7 +22,7 @@ import type {
 } from '@/types/game';
 import { leagueAwards, worldAwards } from './awards';
 import { emptyStatsByCompetition } from './character';
-import { applySeasonalAging } from './growth';
+import { applySeasonalAging, fieldAttributeAverage } from './growth';
 import { seasonStartCondition } from './interTurn';
 import { simulateFullSeason } from './league';
 import { evolveNarrative } from './narrative';
@@ -239,14 +240,20 @@ export function closeSeasonCycle(state: GameState, world: SimulationWorld): Game
 
   // 3) 나이 +1, 자연 성장·노화
   const aging = applySeasonalAging(next.player, rngFor(next.seed, 'aging', newSeason));
-  next = { ...next, player: aging.player };
+  const seasonalChanges = (Object.keys(aging.deltas) as AttributeKey[]).flatMap((key) => {
+    const before = next.player.attributes[key];
+    const after = aging.player.attributes[key];
+    return before !== after ? [{ key, before, after }] : [];
+  });
+  const lastTurn = next.lastTurn?.development && seasonalChanges.length ? { ...next.lastTurn, development: { ...next.lastTurn.development, ovrAfter: aging.player.ovr, averageAfter: fieldAttributeAverage(aging.player.attributes), seasonalChanges } } : next.lastTurn;
+  next = { ...next, player: aging.player, lastTurn };
   const declines = Object.values(aging.deltas).filter((d) => (d ?? 0) < 0).reduce((s, d) => s + (d ?? 0), 0);
   if (declines <= -4) {
     const shielded = Object.values(aging.shielded).reduce((s, d) => s + (d ?? 0), 0);
     next = pushNotice(next, {
       kind: 'INFO',
       title: '세월의 흐름',
-      body: `${next.player.age}세가 되며 능력치가 ${Math.abs(declines)}만큼 떨어졌다.${shielded > 0 ? ` (아이템 관리로 ${Math.round(shielded)} 방어)` : ''}`,
+      body: `${next.player.age}세가 되며 능력치가 ${Math.abs(declines)}만큼 하락했다.${shielded > 0 ? ` (아이템 관리로 하락 완화)` : ''}`,
     });
   }
 

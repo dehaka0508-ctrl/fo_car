@@ -1,309 +1,125 @@
 @import "tailwindcss";
-
-/* 항상 '나이트 스타디움' 어두운 테마: dark: 변형은 <html class="dark"> 기준 */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* zinc → 밤 경기장 남색 (50 가장 밝음 · 950 가장 어두움) */
-  --color-zinc-50: #f4f7fb;
-  --color-zinc-100: #e5eaf2;
-  --color-zinc-200: #cfd8e4;
-  --color-zinc-300: #b4c0d0;
-  --color-zinc-400: #97a6ba;
-  --color-zinc-500: #7d8ea6;
-  --color-zinc-600: #55657c;
-  --color-zinc-700: #34435a;
-  --color-zinc-800: #223047;
-  --color-zinc-900: #151f30;
-  --color-zinc-950: #0b1220;
-
-  /* emerald → 잔디 녹색 */
-  --color-emerald-50: #ecfdf1;
-  --color-emerald-100: #d1fadf;
-  --color-emerald-200: #a6f0c0;
-  --color-emerald-300: #6fe39b;
-  --color-emerald-400: #44d17a;
-  --color-emerald-500: #2bb862;
-  --color-emerald-600: #20984f;
-  --color-emerald-700: #1b7a41;
-  --color-emerald-800: #186136;
-  --color-emerald-900: #134d2c;
-  --color-emerald-950: #0a2b18;
-
-  /* 도트 느낌: 모서리를 둥글리지 않는다 (rounded-full은 그대로) */
-  --radius-xs: 0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-  --radius-3xl: 0px;
-  --radius-4xl: 0px;
-
-  --animate-pixel-idle: pixel-idle 1.2s steps(1) infinite;
-  @keyframes pixel-idle {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-3px);
-    }
-  }
+  --color-zinc-50: #f5f7fa;
+  --color-zinc-100: #e8edf3;
+  --color-zinc-200: #d2dbe5;
+  --color-zinc-300: #b5c2d0;
+  --color-zinc-400: #96a5b7;
+  --color-zinc-500: #7b8b9e;
+  --color-zinc-600: #536276;
+  --color-zinc-700: #344255;
+  --color-zinc-800: #222e3e;
+  --color-zinc-900: #151f2d;
+  --color-zinc-950: #0d141e;
+  --color-emerald-50: #effef8;
+  --color-emerald-100: #d3f9e9;
+  --color-emerald-200: #a6f0d3;
+  --color-emerald-300: #78e2ba;
+  --color-emerald-400: #53d5a4;
+  --color-emerald-500: #26986d;
+  --color-emerald-600: #1d805c;
+  --color-emerald-700: #21674f;
+  --color-emerald-800: #214e40;
+  --color-emerald-900: #193c32;
+  --color-emerald-950: #102a23;
 }
-
 @theme inline {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
-  --font-pixel: var(--font-galmuri), ui-monospace, monospace;
+  /* Existing stats share the UI typeface; pixel art remains in the sprites. */
+  --font-pixel: var(--font-sans);
 }
-
-:root {
-  color-scheme: dark;
-  /* 패널 */
-  --panel: #131d2e;
-  --panel-top: #18253a;
-  --panel-line: #33445f;
-  --panel-ink: #05080f;
-  --led: #ffd23f;
-}
-
-html {
-  background: #070c17;
-}
-
-body {
-  color: var(--color-zinc-100);
-  font-family: var(--font-sans);
-}
-
-/* 제목 · 버튼 · 숫자는 픽셀 폰트 (갈무리11은 12px · 24px에서 가장 선명) */
-h1,
-h2,
-h3,
-button,
-.font-pixel {
-  font-family: var(--font-pixel);
-  letter-spacing: 0;
-}
-
-input[type="range"],
-input[type="checkbox"],
-input[type="radio"] {
-  accent-color: var(--color-emerald-400);
-}
-
-::selection {
-  background: #2bb86266;
-}
+:root { color-scheme: dark; --panel-line: #2a3748; }
+html { background: #0d141e; }
+body { color: var(--color-zinc-100); font-family: var(--font-sans); line-height: 1.6; }
+h1, h2, h3 { letter-spacing: -0.035em; text-wrap: balance; }
+button:not(:disabled), select, input[type="range"] { cursor: pointer; }
+button, a, input, select { -webkit-tap-highlight-color: transparent; }
+input[type="range"], input[type="checkbox"], input[type="radio"] { accent-color: var(--color-emerald-400); }
+input[type="range"] { min-height: 32px; width: 100%; }
+::selection { background: #53d5a440; }
+* { scrollbar-width: thin; scrollbar-color: #344255 transparent; }
+:focus-visible { outline: 2px solid var(--color-emerald-300); outline-offset: 3px; }
 
 @layer components {
-  /* 도트 패널: 박스 그림자로 3px 테두리를 그려 모서리가 계단처럼 깎인다 */
-  .px-panel {
-    background: linear-gradient(180deg, var(--panel-top), var(--panel) 48px);
-    box-shadow:
-      0 -3px 0 0 var(--panel-line),
-      0 3px 0 0 var(--panel-line),
-      -3px 0 0 0 var(--panel-line),
-      3px 0 0 0 var(--panel-line),
-      0 9px 0 0 rgb(0 0 0 / 0.45);
-  }
+  .px-panel { background: #151f2d; border: 1px solid var(--panel-line); border-radius: 18px; box-shadow: 0 8px 30px rgb(0 0 0 / 0.12); }
+  .px-inset { background: #101925; border: 1px solid #263344; border-radius: 12px; }
+  .px-btn { position: relative; min-height: 36px; border: 1px solid rgb(255 255 255 / 0.08); border-radius: 10px; transition: background-color 160ms, border-color 160ms, transform 160ms; }
+  .px-btn:not(:disabled):hover { border-color: rgb(255 255 255 / 0.25); }
+  .px-btn:not(:disabled):active { transform: translateY(1px); }
+  .px-btn:disabled { opacity: 0.55; }
+  .px-meter { height: 6px; overflow: hidden; background: #293548; border-radius: 999px; }
+  .px-meter > span { display: block; height: 100%; border-radius: inherit; transition: width 220ms; }
+  .player-stage { background: radial-gradient(ellipse at 50% 15%, #28514a55, transparent 75%), #111d29; }
+  .player-stage-award { background: radial-gradient(ellipse at 50% 0%, #fcd34d26, transparent 75%), #211d2b; }
+  .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: #53d5a414; border: 1px solid #53d5a433; }
+  .eyebrow { color: #78e2ba; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; }
+  .creation-shell { max-width: 1120px; margin: 0 auto; padding: 28px 24px 48px; width: 100%; }
+  .creation-intro { padding: 44px 0 28px; max-width: 680px; }
+  .creation-intro h1 { margin: 12px 0; font-size: clamp(28px, 4vw, 40px); font-weight: 750; line-height: 1.25; }
+  .creation-intro p:last-child { color: #96a5b7; font-size: 14px; line-height: 1.9; }
+  .creation-preview { position: sticky; top: 24px; }
+  .creation-preview .player-stage { min-height: 220px; padding-top: 28px; }
+  .creation-form input[type="range"] { margin-top: 6px; }
+  .game-shell { max-width: 1160px; margin: auto; display: flex; min-height: 100dvh; width: 100%; flex-direction: column; gap: 20px; padding: 0 24px 24px; }
+  .game-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: 260px minmax(0, 1fr); align-items: start; gap: 28px; }
+  .game-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #263344; padding: 20px 0; }
+  .step-nav { display: flex; gap: 4px; padding: 5px; border: 1px solid #263344; border-radius: 14px; background: #101925; }
+  .step-nav button { border-radius: 9px; }
+  .mobile-shell { display: flex; min-height: 100dvh; flex-direction: column; gap: 16px; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+  .mobile-shell > header { padding: 2px 3px 6px; }
+  .mobile-shell nav button { min-height: 44px; }
+  .mobile-shell .px-panel { border-radius: 14px; }
+  .step-content > div { gap: 20px; }
+  .step-content table td { padding-block: 8px; }
+  .step-content table tr + tr { border-top: 1px solid #263344; }
+  .step-content button.px-inset { padding: 12px; min-height: 64px; }
+  .player-panel { position: sticky; top: 20px; }
+  .player-panel > dl { border-block: 1px solid #263344; padding-block: 16px; }
+}
+/* A quiet field motif gives the game a sense of place. */
+.stadium { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; background: radial-gradient(ellipse at 90% 0%, #24504b26, transparent 55%), #0d141e; }
+.stadium-field { position: absolute; width: 700px; height: 1000px; right: -160px; top: -350px; border: 1px solid #53d5a40a; border-radius: 24px; transform: rotate(-25deg); }
+.stadium-field::before { content: ""; position: absolute; width: 260px; height: 260px; border: 1px solid #53d5a40a; border-radius: 50%; left: calc(50% - 130px); top: calc(50% - 130px); }
+.stadium-field::after { content: ""; position: absolute; top: 50%; width: 100%; border-top: 1px solid #53d5a40a; }
 
-  .px-inset {
-    background: #0c1424;
-    box-shadow:
-      inset 0 2px 0 0 #070b14,
-      0 -2px 0 0 #26354d,
-      0 2px 0 0 #26354d,
-      -2px 0 0 0 #26354d,
-      2px 0 0 0 #26354d;
-  }
-
-  /* 도트 버튼: 바깥 2px 검은 테두리 + 아래쪽 3px 그늘, 누르면 2px 내려간다 */
-  .px-btn {
-    position: relative;
-    box-shadow:
-      0 -2px 0 0 var(--panel-ink),
-      0 2px 0 0 var(--panel-ink),
-      -2px 0 0 0 var(--panel-ink),
-      2px 0 0 0 var(--panel-ink),
-      inset 0 -3px 0 0 rgb(0 0 0 / 0.32),
-      inset 0 2px 0 0 rgb(255 255 255 / 0.18);
-    transition: transform 60ms steps(1);
-  }
-  .px-btn:not(:disabled):active {
-    transform: translateY(2px);
-    box-shadow:
-      0 -2px 0 0 var(--panel-ink),
-      0 2px 0 0 var(--panel-ink),
-      -2px 0 0 0 var(--panel-ink),
-      2px 0 0 0 var(--panel-ink),
-      inset 0 2px 0 0 rgb(0 0 0 / 0.32);
-  }
-  .px-btn:focus-visible,
-  .px-focus:focus-visible {
-    outline: 2px solid var(--led);
-    outline-offset: 4px;
-  }
-
-  /* 칸이 나뉜 게이지 (HP 바) */
-  .px-meter {
-    height: 10px;
-    background: #0a101c;
-    box-shadow:
-      0 -2px 0 0 #26354d,
-      0 2px 0 0 #26354d,
-      -2px 0 0 0 #26354d,
-      2px 0 0 0 #26354d;
-  }
-  .px-meter > span {
-    display: block;
-    height: 100%;
-    background-image: linear-gradient(90deg, transparent 0 6px, rgb(0 0 0 / 0.55) 6px 8px), linear-gradient(180deg, rgb(255 255 255 / 0.25) 0 3px, transparent 3px);
-    background-size:
-      8px 100%,
-      100% 100%;
-  }
-
-  .pixel-idle {
-    animation: var(--animate-pixel-idle);
-  }
-}
-
-/* ---------------------------------------------------------------------------
- * 배경: 밤 경기장 (components/StadiumBackdrop.tsx)
- * ------------------------------------------------------------------------- */
-.stadium {
-  position: fixed;
-  inset: 0;
-  z-index: -10;
-  overflow: hidden;
-  pointer-events: none;
-  background: #0a2a17;
-}
-.stadium-sky {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 130px;
-  /* 계단식 그라데이션 (8비트 하늘) */
-  background: linear-gradient(
-    180deg,
-    #04070f 0 26px,
-    #060b17 26px 52px,
-    #08101f 52px 78px,
-    #0b1528 78px 104px,
-    #0e1a31 104px 130px
-  );
-}
-.stadium-stars {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-.stadium-glow {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 340px 300px at 27% 30px, rgb(255 246 205 / 0.22), transparent 70%),
-    radial-gradient(ellipse 340px 300px at 73% 30px, rgb(255 246 205 / 0.22), transparent 70%),
-    radial-gradient(ellipse 60% 420px at 50% 330px, rgb(160 255 180 / 0.08), transparent 70%);
-  z-index: 3;
-}
-.stadium-tower {
-  position: absolute;
-  top: 6px;
-  z-index: 2;
-}
-.stadium-tower-left {
-  left: 26%;
-}
-.stadium-tower-right {
-  right: 26%;
-}
 @media (max-width: 639px) {
-  .stadium-tower {
-    display: none;
-  }
+  .creation-shell { padding: 20px 16px 32px; }
+  .creation-intro { padding-top: 28px; }
+  .creation-preview { position: static; }
+  .creation-preview .player-stage { min-height: 180px; }
 }
-.stadium-stands {
-  position: absolute;
-  top: 104px;
-  left: 0;
-}
-.stadium-boards {
-  position: absolute;
-  top: 280px;
-  left: 0;
-  right: 0;
-  height: 26px;
-  overflow: hidden;
-  background: #04060b;
-  border-top: 2px solid #2a3650;
-  border-bottom: 2px solid #0b0f18;
-  z-index: 2;
-}
-/* LED 도트 격자 */
-.stadium-boards::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 2px, rgb(0 0 0 / 0.55) 2px 3px),
-    repeating-linear-gradient(180deg, transparent 0 2px, rgb(0 0 0 / 0.55) 2px 3px);
-}
-.stadium-marquee {
-  display: flex;
-  width: max-content;
-  font-family: var(--font-pixel);
-  font-size: 12px;
-  line-height: 22px;
-  color: var(--led);
-  text-shadow: 0 0 6px rgb(255 210 63 / 0.7);
-  white-space: nowrap;
-  animation: stadium-marquee 60s linear infinite;
-}
-.stadium-marquee span:nth-child(2) {
-  color: #6fe39b;
-  text-shadow: 0 0 6px rgb(111 227 155 / 0.6);
-}
-@keyframes stadium-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-.stadium-pitch {
-  position: absolute;
-  top: 306px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  /* 잔디 깎은 줄무늬 + 도트 잔디결 */
-  background:
-    repeating-linear-gradient(90deg, rgb(0 0 0 / 0.06) 0 4px, transparent 4px 12px),
-    repeating-linear-gradient(180deg, #1f7a3c 0 64px, #1b6c35 64px 128px);
-}
-.stadium-pitch-lines {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(#e8f2e4, #e8f2e4) 0 18px / 100% 4px no-repeat,
-    radial-gradient(circle 120px at 50% 360px, transparent 114px, #e8f2e4 115px 119px, transparent 120px),
-    linear-gradient(#e8f2e4, #e8f2e4) 50% 18px / 4px 100% no-repeat;
-  opacity: 0.55;
-}
-/* 아래로 갈수록 어둡게 (글자 대비) */
-.stadium-shade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgb(4 8 16 / 0) 0, rgb(4 8 16 / 0) 300px, rgb(4 8 16 / 0.5) 520px, rgb(4 8 16 / 0.72) 100%);
-  z-index: 4;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .stadium-marquee,
-  .pixel-idle {
-    animation: none;
-  }
+/* An original coach-led introduction, with the rhythm of a handheld RPG. */
+.coach-step { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 2px solid #263344; color: #7b8b9e; font-size: 12px; }
+.coach-step.active { border-color: #53d5a4; color: #78e2ba; background: #53d5a407; }
+.coach-scene { position: relative; display: flex; justify-content: center; align-items: end; height: 230px; overflow: hidden; background: radial-gradient(ellipse at 50% 0%, #53d5a41a, transparent 75%), linear-gradient(#132733 0 62%, #183b34 62% 100%); }
+.coach-field-line { position: absolute; width: 500px; height: 160px; bottom: -100px; border: 2px solid #78e2ba22; border-radius: 50%; }
+.coach-character { position: relative; z-index: 1; margin-bottom: 18px; filter: drop-shadow(0 8px 12px #0005); }
+.coach-scene-caption { position: absolute; bottom: 12px; left: 20px; color: #a6f0d350; font-size: 9px; letter-spacing: 0.15em; }
+.coach-dialogue { min-height: 152px; padding: 20px 24px; background: #111c2a; border-top: 1px solid #53d5a433; }
+@media (max-width: 639px) {
+  .coach-step { flex-direction: column; align-items: start; gap: 3px; padding: 8px 4px; font-size: 11px; }
+  .coach-scene { height: 190px; }
+  .coach-dialogue { padding: 20px; }
+  .coach-setup .creation-preview { position: static; }
+}
+
+/* Comfortable reading width and a summary-first turn report. */
+@layer components {
+  .step-content { font-size: 14px; line-height: 1.75; }
+  .step-content .text-\[11px\], .step-content .text-xs { font-size: 13px; }
+  .step-content button { min-height: 40px; }
+  .career-details { padding: 18px 20px; border-top: 1px solid var(--panel-line); color: var(--color-zinc-300); font-size: 14px; }
+  .career-details > summary { cursor: pointer; font-weight: 600; }
+  .report-section { padding-block: 24px; border-top: 1px solid var(--panel-line); }
+  .report-section h3 { font-size: 17px; font-weight: 650; margin-bottom: 14px; }
+  .report-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-block: 11px; font-size: 14px; }
+  .report-row > :first-child { color: var(--color-zinc-400); }
+  .report-row > :last-child { color: var(--color-zinc-50); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .report-confirm { position: sticky; bottom: -20px; margin: 20px -20px -20px; padding: 16px 20px; background: #151f2df5; border-top: 1px solid var(--panel-line); }
 }

@@ -14,23 +14,36 @@ import type {
   GameState,
   TurnPhase,
 } from '@/types/game';
-import { calculateOVR } from './ovr';
+import { POSITION_META } from '@/data/playstyles';
+import { PLAYSTYLES_BY_POSITION, POSITIONS, TURN_PHASES, type Position } from '@/types/game';
+import { calculateOVR, rankPositionFit } from './ovr';
 import { clamp, hashSeed, rngFor, type Rng } from './rng';
 import { formatMoney } from './state';
 import { clubName, type SimulationWorld } from './world';
+
+export const eventTurnIndex = (state: GameState): number => state.turn.season * TURN_PHASES.length + TURN_PHASES.indexOf(state.turn.phase);
 
 export function isEventAvailable(def: GameEventDefinition, state: GameState, completedPhase: TurnPhase): boolean {
   const { player } = state;
   if (!def.phases.includes(completedPhase)) return false;
   if (def.minAge !== undefined && player.age < def.minAge) return false;
   if (def.maxAge !== undefined && player.age > def.maxAge) return false;
+  const occurrence = state.eventHistory?.[def.id];
+  if (occurrence && def.maxOccurrences !== undefined && occurrence.count >= def.maxOccurrences) return false;
+  if (occurrence && def.cooldownTurns !== undefined && eventTurnIndex(state) - occurrence.lastTurn < def.cooldownTurns) return false;
+  // Older saves have no ledger; the previous active event still prevents an immediate repeat.
+  if (!occurrence && def.cooldownTurns && state.events.some((event) => event.definitionId === def.id)) return false;
   const req = def.requires;
   if (!req) return true;
+  if (req.positions && !req.positions.includes(player.profile.role.position)) return false;
   if (req.partner && !(state.partner && state.partner.status === 'ACTIVE')) return false;
   if (req.rival && !state.rival) return false;
   if (req.firstTeam && player.squad.level !== 'FIRST_TEAM') return false;
   if (req.hasClub && !player.contract) return false;
   if (req.minReputation !== undefined && player.reputation < req.minReputation) return false;
+  if (req.maxReputation !== undefined && player.reputation > req.maxReputation) return false;
+  if (req.minOVR !== undefined && player.ovr < req.minOVR) return false;
+  if (req.maxOVR !== undefined && player.ovr > req.maxOVR) return false;
   if (req.minMoney !== undefined && player.money < req.minMoney) return false;
   return true;
 }
@@ -59,22 +72,31 @@ export function rollEvents(
   completedPhase: TurnPhase,
   rng: Rng,
 ): ActiveEvent[] {
-  const available = GAME_EVENTS.filter((def) => isEventAvailable(def, state, completedPhase));
+  const available = GAME_EVENTS.filter((def) => def.id !== 'position-change-offer' && isEventAvailable(def, state, completedPhase));
   const guaranteed = available.filter((def) => def.guaranteed);
   const pool = available.filter((def) => !def.guaranteed);
   const picked: GameEventDefinition[] = [...guaranteed];
   const target = Math.max(eventCount(rng), guaranteed.length);
 
   while (picked.length < target && pool.length) {
-    const index = rng.weightedIndex(pool.map((def) => def.weight));
-    picked.push(pool.splice(index, 1)[0]);
+    const different = pool.filter((def) => !picked.some((previous) => previous.category === def.category));
+    const candidates = different.length ? different : pool;
+    const selected = candidates[rng.weightedIndex(candidates.map((def) => def.weight / (1 + (state.eventHistory?.[def.id]?.count ?? 0))))];
+    picked.push(selected);
+    pool.splice(pool.indexOf(selected), 1);
   }
 
+  const proposal = isEventAvailable(GAME_EVENT_MAP['position-change-offer'], state, completedPhase) ? positionChangeProposal(state) : null;
+  if (proposal) {
+    const index = picked.findIndex((def) => !def.guaranteed);
+    if (index >= 0) picked[index] = GAME_EVENT_MAP['position-change-offer'];
+    else picked.push(GAME_EVENT_MAP['position-change-offer']);
+  }
   const vars = eventVars(state, world);
   return picked.map((def, i) => ({
     instanceId: `ev-${hashSeed(state.seed, state.turn.season, completedPhase, def.id, i)}`,
     definitionId: def.id,
-    vars,
+    vars: def.id === 'position-change-offer' && proposal ? { ...vars, targetPosition: proposal, targetPositionLabel: POSITION_META[proposal].label, currentPosition: POSITION_META[state.player.profile.role.position].label } : vars,
     resolution: null,
   }));
 }
@@ -93,6 +115,10 @@ export function applyEventEffects(state: GameState, effects: readonly EventEffec
 
   for (const effect of effects) {
     switch (effect.kind) {
+      case 'POSITION':
+        player = { ...player, profile: { ...player.profile, role: { position: effect.position, playStyle: PLAYSTYLES_BY_POSITION[effect.position][0] } as typeof player.profile.role } };
+        summary.push(`포지션 변경: ${POSITION_META[effect.position].label}`);
+        break;
       case 'MENTAL':
         player.mental = clamp(player.mental + effect.delta, 0, 100);
         summary.push(`멘탈 ${sign(effect.delta)}`);
@@ -149,7 +175,12 @@ export function resolveEvent(state: GameState, instanceId: string, choiceId: str
   if (!isChoiceAffordable(choice, state)) throw new Error('돈이 부족합니다.');
 
   const success = choice.successChance === undefined || rngFor(state.seed, instanceId, choiceId).chance(choice.successChance);
-  const effects = success ? choice.effects : (choice.failureEffects ?? []);
+  let effects: EventEffect[] = success ? choice.effects : (choice.failureEffects ?? []);
+  if (event.definitionId === 'position-change-offer' && choice.id === 'accept') {
+    const position = event.vars.targetPosition as Position;
+    if (!POSITIONS.includes(position) || position === 'GK' || state.player.profile.role.position === 'GK') throw new Error('유효하지 않은 포지션 제의입니다.');
+    effects = [{ kind: 'POSITION', position }];
+  }
   const applied = applyEventEffects(state, effects);
   const summary = choice.successChance === undefined ? applied.summary : [success ? '성공!' : '실패…', ...applied.summary];
 
@@ -159,4 +190,15 @@ export function resolveEvent(state: GameState, instanceId: string, choiceId: str
       e.instanceId === instanceId ? { ...e, resolution: { choiceId, success, summary } } : e,
     ),
   };
+}
+
+/** 다른 필드 포지션의 적합 OVR이 3 이상 높을 때, 턴마다 25% 확률로 제의한다. */
+export function positionChangeProposal(state: GameState): Position | null {
+  const player = state.player;
+  if (player.profile.role.position === 'GK' || !player.contract) return null;
+  const fits = rankPositionFit(player.attributes);
+  const current = fits.find((fit) => fit.position === player.profile.role.position)!;
+  const best = fits[0];
+  if (best.position === current.position || best.ovr < current.ovr + 3) return null;
+  return rngFor(state.seed, state.turn.season, state.turn.phase, 'position-offer').chance(0.25) ? best.position : null;
 }

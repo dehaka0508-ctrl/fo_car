@@ -6,12 +6,22 @@
  * 프리시즌 휴가 계획(vacation-plan)은 후반기 종료 후 반드시 발생하며, '휴식'을 고르고
  * 그해 여름 대표팀 차출이 없으면 다음 시즌을 체력 100으로 시작한다 (engine/interTurn.ts).
  */
+import { EXPANDED_EVENTS } from './eventExpansion';
 import type { GameEventDefinition, TurnPhase } from '@/types/game';
 
 const ALL: TurnPhase[] = ['FIRST_HALF', 'SECOND_HALF', 'PRESEASON'];
 const SEASON: TurnPhase[] = ['FIRST_HALF', 'PRESEASON'];
 
-export const GAME_EVENTS: GameEventDefinition[] = [
+const ORIGINAL_EVENTS: GameEventDefinition[] = [
+  {
+    id: 'position-change-offer', category: 'TEAM', title: '새 포지션 제의',
+    body: '코치가 {name}의 능력치를 분석했습니다. 현재 {currentPosition}보다 {targetPositionLabel}에서 더 좋은 활약이 기대됩니다. 포지션을 바꿔 볼까요?',
+    phases: ALL, weight: 0,
+    choices: [
+      { id: 'accept', label: '새 포지션에 도전한다', description: '능력치는 그대로 유지하고, 제안받은 포지션으로 변경합니다.', effects: [] },
+      { id: 'decline', label: '현재 포지션을 유지한다', effects: [] },
+    ],
+  },
   // ----- 프리시즌 휴가 계획 (필수) -----
   {
     id: 'vacation-plan',
@@ -61,7 +71,9 @@ export const GAME_EVENTS: GameEventDefinition[] = [
     title: '가족의 입원',
     body: '{name}의 어머니가 갑자기 병원에 입원하셨다는 연락이 왔다.',
     phases: ALL,
-    weight: 3,
+    weight: 0.4,
+    cooldownTurns: 12,
+    maxOccurrences: 2,
     choices: [
       { id: 'visit', label: '경기 후 바로 병원으로', effects: [{ kind: 'MENTAL', delta: 4 }, { kind: 'CONDITION', delta: -6 }] },
       { id: 'leave', label: '구단에 휴가를 요청한다', effects: [{ kind: 'MENTAL', delta: 7 }, { kind: 'STANDING', delta: -4 }] },
@@ -424,6 +436,13 @@ export const GAME_EVENTS: GameEventDefinition[] = [
     ],
   },
 ];
+
+/** 반복 가능한 일상도 최소 두 시즌 간격. 단발성 인생 사건은 한 번만 발생한다. */
+export const GAME_EVENTS: GameEventDefinition[] = [...ORIGINAL_EVENTS, ...EXPANDED_EVENTS].map((event) => ({
+  ...event,
+  cooldownTurns: event.guaranteed ? undefined : event.cooldownTurns ?? 6,
+  maxOccurrences: ['family-sibling', 'family-relationship', 'family-wedding'].includes(event.id) ? 1 : event.maxOccurrences,
+}));
 
 export const GAME_EVENT_MAP: Record<string, GameEventDefinition> = Object.fromEntries(
   GAME_EVENTS.map((event) => [event.id, event]),

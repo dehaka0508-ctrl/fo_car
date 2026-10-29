@@ -1,13 +1,13 @@
 /**
  * OVR(오버롤) 산출
  *
- * OVR = 현재 포지션·플레이 스타일이 요구하는 핵심 스탯들의 가중 평균.
+ * OVR = 현재 포지션 공통 프로필의 가중 평균. 초기 세부 역할은 반영하지 않는다.
  * 팀 승패 계산에 들어가는 유일한 선수 수치다 (engine/simulator.ts 참고).
  */
 import { ATTRIBUTE_MAX, ATTRIBUTE_MIN } from '@/data/attributes';
-import { getPlayStyle, type AttributeWeights } from '@/data/playstyles';
+import { getPlayStyle, getPositionProfile, type AttributeWeights } from '@/data/playstyles';
 import type { AttributeKey, Attributes, PlayerRole, PlayStyle, Position } from '@/types/game';
-import { PLAYSTYLES_BY_POSITION } from '@/types/game';
+import { PLAYSTYLES_BY_POSITION, POSITIONS } from '@/types/game';
 import { clamp } from './rng';
 
 /** 가중치 테이블로 능력치의 가중 평균을 구한다. 가중치가 비어 있으면 0. */
@@ -23,7 +23,7 @@ export function weightedScore(attributes: Attributes, weights: AttributeWeights)
 }
 
 export function calculateOVR(attributes: Attributes, role: PlayerRole): number {
-  const weights = getPlayStyle(role.playStyle).ovrWeights;
+  const weights = getPositionProfile(role.position).ovrWeights;
   return clamp(Math.round(weightedScore(attributes, weights)), ATTRIBUTE_MIN, ATTRIBUTE_MAX);
 }
 
@@ -42,5 +42,12 @@ export function rankPlayStyleFit(
         ATTRIBUTE_MAX,
       ),
     }))
+    .sort((a, b) => b.ovr - a.ovr);
+}
+
+/** 현재 능력치가 어느 포지션에 더 적합한지 비교한다. 초기 세부 역할은 사용하지 않는다. */
+export function rankPositionFit(attributes: Attributes, isGoalkeeper = false): Array<{ position: Position; ovr: number }> {
+  return POSITIONS.filter((position) => (position === 'GK') === isGoalkeeper)
+    .map((position) => ({ position, ovr: clamp(Math.round(weightedScore(attributes, getPositionProfile(position).ovrWeights)), ATTRIBUTE_MIN, ATTRIBUTE_MAX) }))
     .sort((a, b) => b.ovr - a.ovr);
 }

@@ -1,13 +1,15 @@
 'use client';
 
 import { PlayerToken } from '@/components/Avatar';
+import { getPositionGroup } from '@/data/playstyles';
 import { HIGHLIGHT_KIND_LABELS, TURN_PHASE_LABELS } from '@/data/labels';
 import { BASE_WORLD } from '@/engine/career';
-import { averageRating, mergeStatLines } from '@/engine/simulator';
+import { averageRating, mergeStatLines, passAccuracy } from '@/engine/simulator';
 import { turnLabel } from '@/engine/state';
 import { kitColorsFor } from '@/engine/world';
 import type { CompetitionType, GameState, NoticeKind, PlayerStatLine, SeasonRecord, TeamRecord, TurnResult } from '@/types/game';
 import { competitionName, ratingText, seasonLabel } from './format';
+import { TurnGrowth } from './TurnGrowth';
 import { cx, signed, Tag } from './ui';
 
 const CLUB_TYPES: CompetitionType[] = ['LEAGUE', 'DOMESTIC_CUP', 'CONTINENTAL'];
@@ -40,12 +42,12 @@ export function turnHeadline(turn: TurnResult): { label: string; line: PlayerSta
   const others = candidates
     .filter((c) => c !== best && c.line.appearances > 0)
     .map((c) => `${c.label} ${c.line.appearances}경기 ${c.line.goals}골 ${c.line.assists}도움`);
-  return { ...best, others };
+  return { ...best, label: '전체 대회', line: mergeStatLines(...Object.values(turn.playerStats)), team: sumTeam(Object.values(turn.teamStats)), others };
 }
 
 function seasonHeadline(record: SeasonRecord): PlayerStatLine {
   const club = mergeStatLines(...CLUB_TYPES.map((t) => record.stats[t]));
-  return club.appearances > 0 ? club : record.stats.RESERVE;
+  return mergeStatLines(club, record.stats.RESERVE, record.stats.INTERNATIONAL, record.stats.FRIENDLY);
 }
 
 function ratingTone(rating: number | null): string {
@@ -60,7 +62,7 @@ function Tile({ label, value, sub, tone }: { label: string; value: string | numb
   return (
     <div className="px-inset m-[2px] flex flex-col items-center px-1 py-2">
       <span className="text-[11px] text-zinc-400">{label}</span>
-      <span className={cx('font-pixel text-2xl leading-7 tabular-nums drop-shadow-[2px_2px_0_#05080f]', tone ?? 'text-zinc-50')}>{value}</span>
+      <span className={cx('font-pixel text-2xl leading-7 tabular-nums', tone ?? 'text-zinc-50')}>{value}</span>
       {sub ? <span className="text-[10px] text-zinc-500">{sub}</span> : <span className="text-[10px]">&nbsp;</span>}
     </div>
   );
@@ -85,13 +87,13 @@ export function TurnResultPanel({ game }: { game: GameState }) {
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      <section className="px-panel m-[3px] flex min-h-0 flex-1 flex-col gap-3 p-3">
+      <section className="px-panel flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         {turn ? <LastTurn turn={turn} game={game} isGK={isGK} /> : <NoTurnYet />}
         <TurnHistory game={game} isGK={isGK} />
       </section>
-      <section className="px-panel m-[3px] flex max-h-44 min-h-0 shrink-0 flex-col p-3">
-        <h2 className="mb-2 flex items-center gap-2 text-xs font-bold text-amber-300">
-          <span aria-hidden="true" className="inline-block size-2 bg-emerald-400 shadow-[2px_2px_0_0_#05080f]" />
+      <section className="px-panel flex max-h-44 min-h-0 shrink-0 flex-col p-4">
+        <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-zinc-100">
+          <span aria-hidden="true" className="inline-block size-1.5 rounded-full bg-emerald-400" />
           소식
         </h2>
         <ul className="flex min-h-0 flex-col gap-1.5 overflow-y-auto pr-1">
@@ -110,7 +112,7 @@ export function TurnResultPanel({ game }: { game: GameState }) {
 function NoTurnYet() {
   return (
     <div className="flex flex-col gap-2">
-      <h2 className="text-xs font-bold text-amber-300">턴 성적</h2>
+      <h2 className="text-sm font-semibold text-zinc-100">턴 성적</h2>
       <p className="px-inset m-[2px] p-3 text-sm text-zinc-300">아직 치른 경기가 없습니다. 첫 경기를 마치면 여기에 턴 성적이 크게 표시됩니다.</p>
     </div>
   );
@@ -123,6 +125,9 @@ function LastTurn({ turn, game, isGK }: { turn: TurnResult; game: GameState; isG
   const previous = game.seasonTurns.length >= 2 ? game.seasonTurns[game.seasonTurns.length - 2] : null;
   const prevPosition = previous && previous.leagueId === turn.leagueId ? previous.leagueTable.find((r) => r.clubId === previous.clubId)?.position : undefined;
   const moved = position !== null && prevPosition !== undefined ? prevPosition - position : 0;
+  const group = getPositionGroup(turn.playerPosition ?? game.player.profile.role.position);
+  const defender = group === 'DEFENDER';
+  const midfielder = group === 'MIDFIELDER';
   const h = turn.highlight;
   const [us, them] = h ? (h.playerTeamSide === 'HOME' ? [h.score.home, h.score.away] : [h.score.away, h.score.home]) : [0, 0];
   const result = h ? (h.score.winner === h.playerTeamSide ? '승' : h.score.winner === 'DRAW' ? '무' : '패') : null;
@@ -130,7 +135,7 @@ function LastTurn({ turn, game, isGK }: { turn: TurnResult; game: GameState; isG
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-xs font-bold text-amber-300">
+        <h2 className="text-sm font-semibold text-zinc-100">
           {seasonLabel(turn.turn.season)} {TURN_PHASE_LABELS[turn.turn.phase]} 성적
         </h2>
         <Tag>{label}</Tag>
@@ -138,13 +143,15 @@ function LastTurn({ turn, game, isGK }: { turn: TurnResult; game: GameState; isG
       <div className="grid grid-cols-4">
         <Tile label="출전" value={line.appearances} sub={team ? `팀 ${team.played}경기` : undefined} />
         {isGK ? (
-          <Tile label="클린시트" value={line.cleanSheets} tone="text-sky-300" sub={`선방 ${line.saves}`} />
-        ) : (
+          <Tile label="선방" value={line.saves} tone="text-sky-300" />
+        ) : defender ? <Tile label="성공 태클" value={line.tackles ?? 0} tone="text-sky-300" /> : (
           <Tile label="골" value={line.goals} tone="text-amber-300" sub={line.appearances ? `경기당 ${(line.goals / line.appearances).toFixed(2)}` : undefined} />
         )}
-        <Tile label="도움" value={line.assists} tone="text-emerald-300" sub={`키패스 ${line.keyPasses}`} />
+        {isGK || defender ? <Tile label="클린시트" value={line.cleanSheets} tone="text-emerald-300" /> : <Tile label="도움" value={line.assists} tone="text-emerald-300" sub={`키패스 ${line.keyPasses}`} />}
         <Tile label="평점" value={ratingText(rating)} tone={ratingTone(rating)} />
       </div>
+      {midfielder ? <div className="grid grid-cols-2 gap-2"><Tile label="패스 성공률" value={passAccuracy(line) === null ? '-' : `${passAccuracy(line)!.toFixed(1)}%`} sub={`${line.passesCompleted ?? 0}/${line.passesAttempted ?? 0}`} /><Tile label="키패스" value={line.keyPasses} /></div> : null}
+      <TurnGrowth report={turn.development} compact />
       <p className="text-xs text-zinc-200">
         {team ? (
           <>

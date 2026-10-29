@@ -8,13 +8,15 @@ import {
   expectedTrainingGain,
   GROWTH_GROUP,
   potentialFactor,
+  fieldAttributeAverage,
+  potentialProgress,
   previewTraining,
   roleWeights,
   turnGrowthRate,
   validateTrainingPlan,
 } from '@/engine/growth';
 import { emptyStatsByCompetition, potentialDistribution, rollPotential } from '@/engine/character';
-import { ATTRIBUTE_KEYS, type AttributeKey } from '@/types/game';
+import { ATTRIBUTE_KEYS, FIELD_STAT_KEYS, GK_STAT_KEYS, type AttributeKey } from '@/types/game';
 import { rngFor } from '@/engine/rng';
 import { canPurchase, previewItemEffect, purchaseItem } from '@/engine/shop';
 import type { PlayerState, TrainingPlan } from '@/types/game';
@@ -113,34 +115,51 @@ describe('경험 성장과 노화', () => {
 });
 
 describe('숨은 포텐셜 · 매 턴 자연 성장', () => {
-  it('포텐셜은 80~100 볼츠만 분포: 80이 가장 흔하고 높을수록 지수적으로 드물다', () => {
-    const dist = potentialDistribution();
-    expect(dist[0].potential).toBe(80);
-    expect(dist.at(-1)!.potential).toBe(100);
-    expect(dist.reduce((a, d) => a + d.probability, 0)).toBeCloseTo(1, 10);
-    for (let i = 1; i < dist.length; i++) expect(dist[i].probability).toBeLessThan(dist[i - 1].probability);
-    // 표본: 5000명
-    const values = Array.from({ length: 5000 }, (_, i) => rollPotential(i + 1));
-    const share = (f: (v: number) => boolean) => values.filter(f).length / values.length;
-    expect(Math.min(...values)).toBeGreaterThanOrEqual(80);
-    expect(Math.max(...values)).toBeLessThanOrEqual(100);
-    expect(share((v) => v === 80)).toBeGreaterThan(0.15);
-    expect(share((v) => v >= 90)).toBeGreaterThan(0.08);
-    expect(share((v) => v >= 90)).toBeLessThan(0.16);
-    expect(share((v) => v >= 95)).toBeLessThan(0.06);
-    const mean = values.reduce((a, v) => a + v, 0) / values.length;
-    expect(mean).toBeGreaterThan(83.5);
-    expect(mean).toBeLessThan(85.5);
-    expect(rollPotential(7)).toBe(rollPotential(7));
+  it('필드 선수는 80~100 볼츠만 분포, GK는 기존 80~100 분포를 유지한다', () => {
+    for (const [position, min] of [['ST', 80], ['GK', 80]] as const) {
+      const dist = potentialDistribution(position);
+      expect(dist[0].potential).toBe(min);
+      expect(dist.at(-1)!.potential).toBe(100);
+      expect(dist.reduce((a, d) => a + d.probability, 0)).toBeCloseTo(1, 10);
+      for (let i = 1; i < dist.length; i++) expect(dist[i].probability).toBeLessThan(dist[i - 1].probability);
+      const values = Array.from({ length: 5000 }, (_, i) => rollPotential(i + 1, position));
+      expect(Math.min(...values)).toBeGreaterThanOrEqual(min);
+      expect(Math.max(...values)).toBeLessThanOrEqual(100);
+      expect(values.reduce((sum, value) => sum + value, 0) / values.length).toBeGreaterThan(min + 3.5);
+      expect(values.reduce((sum, value) => sum + value, 0) / values.length).toBeLessThan(min + 5.5);
+    }
+    expect([1, 2, 3, 7, 42, 999].map((seed) => rollPotential(seed, 'GK'))).toEqual([88, 91, 88, 84, 83, 82]);
+    expect(makePlayer().potential).toBe(rollPotential(1, 'ST'));
+    expect(makePlayer({ role: { position: 'GK', playStyle: 'SWEEPER_KEEPER' } }).potential).toBe(88);
   });
 
-  it('OVR이 포텐셜에 닿으면 훈련 · 경험 · 자연 성장이 멈춘다', () => {
-    const capped = { ...makePlayer({ boost: 20 }), potential: 0 };
-    capped.potential = capped.ovr;
-    expect(potentialFactor(capped)).toBe(0);
-    const preview = previewTraining(capped, { kind: 'FOCUSED', attributes: ['finishing', 'offTheBall'], intensity: 'NORMAL' });
-    expect(Object.values(preview.gains).every((g) => (g ?? 0) <= 0)).toBe(true);
-    expect(applyTurnGrowth(capped, rng('cap')).deltas).toEqual({});
+  it('필드 선수의 성장 한도는 OVR이나 GK 스탯이 아닌 18개 능력치의 반올림 없는 평균이다', () => {
+    const player = { ...makePlayer(), potential: 60 };
+    for (const key of FIELD_STAT_KEYS) player.attributes[key] = 60;
+    player.attributes.finishing = 59;
+    for (const key of GK_STAT_KEYS) player.attributes[key] = 99;
+    player.ovr = 99;
+    expect(fieldAttributeAverage(player.attributes)).toBeCloseTo(60 - 1 / 18, 10);
+    expect(potentialFactor(player)).toBeGreaterThan(0);
+    expect(potentialProgress({ ...player, profile: { ...player.profile, role: { position: 'CB', playStyle: 'STOPPER' } } })).toBe(potentialProgress(player));
+    player.attributes.finishing = 60;
+    player.ovr = 40;
+    expect(potentialFactor(player)).toBe(0);
+    expect(applyTurnGrowth(player, rng('cap')).deltas).toEqual({});
+    expect(previewTraining(player, { kind: 'FOCUSED', attributes: ['finishing', 'offTheBall'], intensity: 'NORMAL' }).gains).toEqual({ finishing: 0, offTheBall: 0 });
+    const stats = emptyStatsByCompetition(); stats.LEAGUE.minutes = 1800;
+    expect(applyMatchExperience(player, stats, rng('capped-exp')).deltas).toEqual({});
+    expect(previewItemEffect(player, SHOP_ITEMS[0])).toEqual({ mode: 'BOOST', expected: 0 });
+  });
+
+  it('GK는 기존 OVR 포텐셜 기준을 유지하며 초기 역할은 성장 계산에 영향을 주지 않는다', () => {
+    const player = makePlayer({ role: { position: 'GK', playStyle: 'SWEEPER_KEEPER' } });
+    const alternate = { ...player, profile: { ...player.profile, role: { position: 'GK' as const, playStyle: 'CLASSIC_GOALKEEPER' as const } } };
+    expect(potentialProgress(player)).toBe(player.ovr);
+    expect(potentialFactor({ ...player, potential: player.ovr })).toBe(0);
+    expect(applyTurnGrowth(player, rng('gk-regression')).deltas).toEqual(applyTurnGrowth(alternate, rng('gk-regression')).deltas);
+    const plan = { kind: 'FOCUSED' as const, attributes: ['reflexes' as const, 'gkPositioning' as const], intensity: 'NORMAL' as const };
+    expect(previewTraining(player, plan)).toEqual(previewTraining(alternate, plan));
   });
 
   it('매 턴 모든 능력치가 소폭 오르고 포지션 핵심 능력치가 더 오른다', () => {
@@ -202,13 +221,39 @@ describe('상점 밸런스', () => {
     expect(player.attributes.sprintSpeed).toBe(rich.attributes.sprintSpeed);
   });
 
-  it('턴당 1회, 같은 아이템은 한 번만, 돈이 있어야 살 수 있다', () => {
+  it('턴당 1회, 같은 아이템도 다음 턴에 다시 살 수 있고 돈이 있어야 한다', () => {
     const item = SHOP_ITEMS[0];
     const poor = { ...makePlayer(), money: 0 };
     expect(canPurchase(poor, item, false).ok).toBe(false);
     const rich = { ...makePlayer(), money: 1_000_000 };
     expect(canPurchase(rich, item, true).ok).toBe(false);
     const owner = purchaseItem(rich, item.id, { season: 2026, phase: 'FIRST_HALF' }, rng('own')).player;
-    expect(canPurchase(owner, item, false).ok).toBe(false);
+    expect(canPurchase(owner, item, false).ok).toBe(true);
+  });
+});
+
+
+describe('베테랑의 능력치 재분배', () => {
+  it('30~35세에 피지컬이 하락하면서 일부 기술·판단 능력은 오르고 평균 한도는 넘지 않는다', () => {
+    for (const age of [29, 31, 33, 34]) {
+      const veteran = { ...atAge(makePlayer(), age), potential: 80, attributes: { ...makePlayer().attributes } };
+      for (const key of FIELD_STAT_KEYS) veteran.attributes[key] = 80;
+      const result = applySeasonalAging(veteran, rng(`veteran-${age}`));
+      expect(result.player.age).toBe(age + 1);
+      expect(result.player.attributes.sprintSpeed).toBeLessThan(80);
+      const positive = Object.entries(result.deltas).filter(([, value]) => (value ?? 0) > 0);
+      expect(positive.length).toBeGreaterThan(0);
+      expect(positive.length).toBeLessThanOrEqual(3);
+      for (const [key] of positive) expect(['sprintSpeed', 'acceleration', 'agility', 'stamina', 'strength', 'aerial']).not.toContain(key);
+      expect(fieldAttributeAverage(result.player.attributes)).toBeLessThanOrEqual(80);
+      expect(result).toEqual(applySeasonalAging(JSON.parse(JSON.stringify(veteran)), rng(`veteran-${age}`)));
+    }
+  });
+
+  it('36세 이후와 GK는 재분배 성장 없이 기존 노화만 적용된다', () => {
+    const old = applySeasonalAging(atAge(makePlayer(), 35), rng('old-stop'));
+    const keeper = applySeasonalAging(atAge(makePlayer({ role: { position: 'GK', playStyle: 'CLASSIC_GOALKEEPER' } }), 32), rng('gk-aging'));
+    expect(Object.values(old.deltas).some((value) => (value ?? 0) > 0)).toBe(false);
+    expect(Object.values(keeper.deltas).some((value) => (value ?? 0) > 0)).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 /**
  * 하이라이트(바둑돌) 매치
  *
- * 시뮬레이터는 하이라이트 경기 직전에서 멈추고, 이 모듈이 그 경기의 브리핑과 장면(상황 2~3개)을 만든다.
+ * 시뮬레이터는 하이라이트 경기 직전에서 멈추고, 이 모듈이 그 경기의 브리핑과 장면(상황 1~2개)을 만든다.
  * 각 상황에는 바둑돌 배치와 성공률이 다른 선택지가 있다. 플레이어가 고른 결과를 모아
  * HighlightOutcome으로 resolveHighlight()에 넘기면 스코어·개인 기록·명성·멘탈에 반영된다.
  *
@@ -20,6 +20,7 @@ import type {
   MatchSituation,
   MatchToken,
   PlayerRole,
+  Position,
   PlayingTime,
   ResolvedSituation,
   SituationKind,
@@ -43,6 +44,8 @@ export const SITUATION_KEY_ATTRIBUTES: Record<SituationKind, readonly AttributeK
 
 const KIND_DIFFICULTY_BONUS: Record<HighlightKind, number> = {
   DERBY: 2,
+  RIVAL_MATCH: 2,
+  TITLE_DECIDER: 4,
   BIG_MATCH: 1,
   DOMESTIC_CUP_FINAL: 3,
   CONTINENTAL_FINAL: 5,
@@ -158,14 +161,6 @@ const OPTION_TEMPLATES: Record<SituationKind, OptionTemplate[]> = {
   ],
 };
 
-const SITUATION_TEXT: Record<SituationKind, string> = {
-  SHOT: '{minute}분, {name}에게 결정적인 슈팅 기회가 왔다!',
-  KEY_PASS: '{minute}분, 하프라인을 넘은 {name}. 수비 뒷공간이 보인다.',
-  DRIBBLE: '{minute}분, 측면에서 {name}과(와) 수비수의 1대1!',
-  SET_PIECE: '{minute}분, 페널티 박스 근처에서 세트피스 기회.',
-  DEFEND: '{minute}분, 상대의 역습! {name}이(가) 마지막 수비수다.',
-  SAVE: '{minute}분, 상대 공격수가 골문 앞에서 슈팅을 준비한다!',
-};
 
 function jitter(rng: Rng, value: number, spread: number): number {
   return Math.round(clamp(value + rng.float(-spread, spread), 3, 97));
@@ -213,25 +208,86 @@ export interface HighlightScene {
   situations: MatchSituation[];
 }
 
-function scenePlayingTime(session: TurnSession, fixture: Fixture): PlayingTime {
-  if (fixture.squad === 'NATIONAL' && session.nationalDuty) return session.nationalDuty.playingTime;
-  if (fixture.squad === 'RESERVE') return 'STARTER';
-  return session.player.squad.playingTime;
+
+interface SceneVariant {
+  id: string;
+  kind: SituationKind;
+  text: string;
+  options?: OptionTemplate[];
 }
 
-/** 하이라이트 장면(상황 2~3개)을 만든다. 같은 세션이면 항상 같은 장면이 나온다. */
+/** 포지션별 경기 맥락을 뽑아 같은 종류의 선택도 서로 다른 상황으로 보여준다. */
+export function positionScenePool(position: Position): SceneVariant[] {
+  const cross: SceneVariant = { id: 'incoming-cross', kind: 'SHOT', text: '{minute}분, 측면에서 {name}에게 크로스가 올라온다. 수비수와 공중볼을 다퉈야 한다!', options: [
+    { label: '높이 뛰어 헤더로 마무리한다', kind: 'SHOT', keys: ['aerial', 'offTheBall'], delta: 2 },
+    { label: '타이밍을 맞춰 발리슛을 시도한다', kind: 'SHOT', keys: ['technique', 'finishing'], delta: 7 },
+    { label: '동료에게 머리로 떨궈 준다', kind: 'KEY_PASS', keys: ['aerial', 'vision'], delta: -2 },
+  ] };
+  const base = (id: string, kind: SituationKind, text: string): SceneVariant => ({ id, kind, text });
+  switch (getPositionGroup(position)) {
+    case 'GOALKEEPER': return [
+      base('one-on-one-save', 'SAVE', '{minute}분, 상대 공격수가 수비 뒷공간을 뚫었다. {name}과의 일대일!'),
+      base('long-shot-save', 'SAVE', '{minute}분, 수비수 사이로 날카로운 중거리 슈팅이 날아온다!'),
+      { id: 'claim-cross', kind: 'SAVE', text: '{minute}분, 골문 앞으로 높은 크로스가 올라온다. {name}의 판단이 필요하다!', options: [
+        { label: '뛰어나가 공을 잡는다', kind: 'SAVE', keys: ['gkRange', 'gkPositioning'], delta: 3 },
+        { label: '펀칭으로 위험 지역을 벗긴다', kind: 'SAVE', keys: ['reflexes', 'organization'], delta: 0 },
+      ] },
+      base('penalty-save', 'SAVE', '{minute}분, 페널티킥! {name}이 상대 키커와 눈을 맞춘다.'),
+    ];
+    case 'DEFENDER': return [
+      base('stop-counter', 'DEFEND', '{minute}분, 상대가 빠른 역습을 전개한다. {name}이 마지막 수비수다!'),
+      { id: 'clear-cross', kind: 'DEFEND', text: '{minute}분, 위험한 크로스가 박스 안으로 들어온다. {name}이 공격수보다 먼저 처리해야 한다!', options: [
+        { label: '헤더로 멀리 걷어 낸다', kind: 'DEFEND', keys: ['aerial', 'strength'], delta: 1 },
+        { label: '낙하지점을 선점해 차단한다', kind: 'DEFEND', keys: ['defPositioning', 'interceptions'], delta: 0 },
+      ] },
+      base('defensive-duel', 'DEFEND', '{minute}분, 상대 윙어가 {name} 앞에서 돌파를 시도한다!'),
+      base('corner-header', 'SET_PIECE', '{minute}분, 공격 코너킥. {name}이 골문 앞 빈 공간으로 파고든다.'),
+      base('build-from-back', 'KEY_PASS', '{minute}분, 상대 압박이 몰려온다. {name}이 전진 패스 길을 찾는다.'),
+    ];
+    case 'MIDFIELDER': return [
+      base('through-ball', 'KEY_PASS', '{minute}분, {name} 앞에서 동료가 수비 뒷공간으로 뛰어간다!'),
+      base('press-escape', 'DRIBBLE', '{minute}분, 두 명이 {name}을 압박한다. 공을 지키며 전진해야 한다!'),
+      base('midfield-interception', 'DEFEND', '{minute}분, 상대의 전진 패스가 {name}의 수비 구역으로 들어온다.'),
+      base('second-ball', 'SHOT', '{minute}분, 걷어 낸 공이 박스 밖 {name} 앞으로 떨어진다!'),
+      base('midfield-set-piece', 'SET_PIECE', '{minute}분, 좋은 위치의 프리킥. {name}이 공 앞에 선다.'),
+    ];
+    default: return position === 'ST' ? [
+      cross,
+      base('one-on-one-shot', 'SHOT', '{minute}분, 침투 패스를 받은 {name}! 골키퍼와 일대일 기회다.'),
+      { id: 'back-to-goal', kind: 'SHOT', text: '{minute}분, {name}이 골문을 등지고 공을 받았다. 수비수가 바짝 붙는다!', options: [
+        { label: '몸으로 버티며 돌아서 슛한다', kind: 'SHOT', keys: ['strength', 'finishing'], delta: 4 },
+        { label: '뒤에서 뛰어오는 동료에게 내준다', kind: 'KEY_PASS', keys: ['pressResistance', 'kickAccuracy'], delta: 0 },
+      ] },
+      base('cutback-shot', 'SHOT', '{minute}분, 골라인까지 돌파한 동료가 {name}에게 낮은 컷백을 보낸다!'),
+      base('striker-counter', 'DRIBBLE', '{minute}분, 역습 기회! {name} 앞에는 수비수 한 명만 남았다.'),
+      base('striker-linkup', 'KEY_PASS', '{minute}분, {name}에게 수비가 몰렸다. 옆으로 동료가 침투한다!'),
+    ] : [
+      base('wing-duel', 'DRIBBLE', '{minute}분, 측면에서 공을 받은 {name}이 풀백과 일대일로 맞선다!'),
+      base('wing-cross', 'KEY_PASS', '{minute}분, {name}이 측면을 뚫었다. 박스 안 동료에게 크로스를 보낼 기회다!'),
+      base('cut-inside', 'SHOT', '{minute}분, {name}이 안쪽으로 접고 들어온다. 반대편 골문이 열렸다!'),
+      cross,
+      base('wing-counter', 'DRIBBLE', '{minute}분, 상대 수비가 올라간 틈으로 {name}이 빠르게 전진한다!'),
+    ];
+  }
+}
+
+/** 하이라이트 장면(상황 1~2개)을 만든다. 같은 세션이면 항상 같은 장면이 나온다. */
 export function buildHighlightScene(session: TurnSession): HighlightScene | null {
   const briefing = getHighlightBriefing(session);
   if (!briefing) return null;
   const rng = rngFor(session.seed, briefing.fixture.id, 'scene');
   const difficulty = situationDifficulty(briefing.opponent.power, briefing.kind);
-  const kinds = defaultSituationKinds(session.player.role, scenePlayingTime(session, briefing.fixture));
-  const minutes = kinds.map(() => rng.int(5, 88)).sort((a, b) => a - b);
+  const pool = positionScenePool(session.player.role.position);
+  const variants = Array.from({ length: session.highlight?.situationCount ?? 2 }, () => pool.splice(rng.int(0, pool.length - 1), 1)[0]);
+  const from = session.highlight?.appearance?.from ?? 4;
+  const to = session.highlight?.appearance?.to ?? 89;
+  const minutes = variants.map(() => rng.int(from + 1, to)).sort((a, b) => a - b);
   const partnerName = briefing.taggedPlayers.find((t) => t.tag === 'PARTNER')?.name ?? null;
 
-  const situations = kinds.map((kind, i): MatchSituation => {
+  const situations = variants.map((variant, i): MatchSituation => {
+    const kind = variant.kind;
     const { tokens, ball } = buildTokens(rng, kind, briefing, partnerName);
-    const options: SituationOption[] = OPTION_TEMPLATES[kind].map((template, j) => ({
+    const options: SituationOption[] = (variant.options ?? OPTION_TEMPLATES[kind]).map((template, j) => ({
       id: `opt-${j}`,
       label: template.label,
       kind: template.kind,
@@ -240,8 +296,9 @@ export function buildHighlightScene(session: TurnSession): HighlightScene | null
     }));
     return {
       id: `${briefing.fixture.id}:S${i + 1}`,
+      context: variant.id,
       minute: minutes[i],
-      description: SITUATION_TEXT[kind].replace('{minute}', String(minutes[i])).replace('{name}', session.player.name),
+      description: variant.text.replace('{minute}', String(minutes[i])).replace('{name}', session.player.name),
       tokens,
       ball,
       options,
@@ -251,7 +308,9 @@ export function buildHighlightScene(session: TurnSession): HighlightScene | null
 }
 
 export function optionSuccessChance(session: TurnSession, option: SituationOption): number {
-  return choiceSuccessChance(session.player.attributes, option.keyAttributes, option.difficulty, session.mental);
+  const base = choiceSuccessChance(session.player.attributes, option.keyAttributes, option.difficulty, session.mental);
+  const kicking = ['SHOT', 'KEY_PASS', 'SET_PIECE'].includes(option.kind);
+  return clamp(base + (kicking ? ((session.player.weakFoot ?? 40) - 40) * 0.001 : 0), 0.05, 0.95);
 }
 
 /** 선택지 하나를 판정한다. 같은 선택이면 항상 같은 결과 (세이브·리로드 악용 방지) */

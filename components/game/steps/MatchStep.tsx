@@ -30,8 +30,9 @@ export function MatchStep({ game }: { game: GameState }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="font-pixel text-2xl text-zinc-50 drop-shadow-[2px_2px_0_#05080f]">
+      <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/5 p-5">
+        <p className="eyebrow mb-2">MATCHDAY</p>
+        <p className="font-pixel text-2xl text-zinc-50">
           {seasonLabel(game.turn.season)} {TURN_PHASE_LABELS[game.turn.phase]}
         </p>
         <p className="text-xs text-zinc-400">{PHASE_TEXT[game.turn.phase]}</p>
@@ -97,8 +98,8 @@ export function MatchStep({ game }: { game: GameState }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" className="px-6 py-3 text-sm" disabled={!check.ok} onClick={playTurn}>
-          ▶ 턴 진행
+        <Button variant="primary" className="w-full px-6 py-3.5 text-sm" disabled={!check.ok} onClick={playTurn}>
+          다음 경기 진행 →
         </Button>
         <Button onClick={() => autoPlay(1)} title="AI가 사건·훈련·구매·이적과 경기를 대신 진행합니다">
           자동 1턴
@@ -106,7 +107,6 @@ export function MatchStep({ game }: { game: GameState }) {
         <Button onClick={() => autoPlay(3)}>자동 1시즌</Button>
         {!check.ok ? <Tag tone="rose">{check.reasons.join(', ')}</Tag> : null}
       </div>
-      <p className="text-[11px] text-zinc-500">턴마다 하이라이트 경기 한 번은 직접 선택을 내립니다. 경기가 끝나면 사건 → 훈련 → 상점 → 이적 순서로 넘어갑니다.</p>
     </div>
   );
 }

@@ -17,12 +17,12 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={cx('px-panel m-[3px] p-4 text-zinc-100', className)}>
+    <section className={cx('px-panel p-5 text-zinc-100', className)}>
       {title || actions ? (
-        <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
           {title ? (
-            <h2 className="flex items-center gap-2 text-xs font-bold text-amber-300">
-              <span aria-hidden="true" className="inline-block size-2 bg-emerald-400 shadow-[2px_2px_0_0_#05080f]" />
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+              <span aria-hidden="true" className="inline-block size-1.5 rounded-full bg-emerald-400" />
               {title}
             </h2>
           ) : (
@@ -39,8 +39,8 @@ export function Card({
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const BUTTON_STYLES: Record<ButtonVariant, string> = {
-  primary: 'px-btn bg-emerald-500 text-white hover:bg-emerald-400 disabled:bg-emerald-800 disabled:text-emerald-300/60',
-  secondary: 'px-btn bg-zinc-700 text-zinc-50 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-500',
+  primary: 'px-btn bg-emerald-400 text-zinc-950 hover:bg-emerald-300 disabled:bg-emerald-800 disabled:text-emerald-300/60',
+  secondary: 'px-btn bg-zinc-800 text-zinc-50 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-500',
   ghost: 'px-focus text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 disabled:opacity-40',
   danger: 'px-btn bg-rose-600 text-white hover:bg-rose-500 disabled:bg-rose-900 disabled:text-rose-300/60',
 };
@@ -54,7 +54,7 @@ export function Button({
     <button
       type="button"
       className={cx(
-        'm-[2px] inline-flex items-center justify-center gap-1 whitespace-nowrap px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold disabled:cursor-not-allowed',
         BUTTON_STYLES[variant],
         className,
       )}
@@ -70,7 +70,7 @@ export function Stat({ label, value, sub, accent }: { label: string; value: Reac
       <span
         className={cx(
           'font-pixel truncate tabular-nums',
-          accent ? 'text-2xl text-amber-300 drop-shadow-[2px_2px_0_#05080f]' : 'text-xs text-zinc-50',
+          accent ? 'text-3xl font-semibold text-emerald-300' : 'text-sm font-semibold text-zinc-50',
         )}
       >
         {value}
@@ -99,24 +99,24 @@ export function Meter({ label, value, max = 100 }: { label: string; value: numbe
 type TagTone = 'zinc' | 'emerald' | 'amber' | 'sky' | 'rose' | 'violet';
 
 const TAG_STYLES: Record<TagTone, string> = {
-  zinc: 'bg-zinc-800 text-zinc-200 shadow-[inset_0_0_0_1px_#34435a]',
-  emerald: 'bg-emerald-950 text-emerald-300 shadow-[inset_0_0_0_1px_#1b7a41]',
-  amber: 'bg-amber-950 text-amber-300 shadow-[inset_0_0_0_1px_#92400e]',
-  sky: 'bg-sky-950 text-sky-300 shadow-[inset_0_0_0_1px_#0369a1]',
-  rose: 'bg-rose-950 text-rose-300 shadow-[inset_0_0_0_1px_#be123c]',
-  violet: 'bg-violet-950 text-violet-300 shadow-[inset_0_0_0_1px_#6d28d9]',
+  zinc: 'bg-zinc-800 text-zinc-200',
+  emerald: 'bg-emerald-950 text-emerald-300',
+  amber: 'bg-amber-950 text-amber-300',
+  sky: 'bg-sky-950 text-sky-300',
+  rose: 'bg-rose-950 text-rose-300',
+  violet: 'bg-violet-950 text-violet-300',
 };
 
 export function Tag({ children, tone = 'zinc' }: { children: ReactNode; tone?: TagTone }) {
-  return <span className={cx('font-pixel inline-flex items-center px-1.5 py-0.5 text-[11px] leading-none', TAG_STYLES[tone])}>{children}</span>;
+  return <span className={cx('inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium leading-none', TAG_STYLES[tone])}>{children}</span>;
 }
 
 export const fieldClass =
-  'w-full border-2 border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-50 outline-none focus:border-emerald-400 disabled:opacity-50';
+  'w-full min-h-11 rounded-xl border border-zinc-700 bg-zinc-950/70 px-3 py-2.5 text-sm text-zinc-50 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/15 disabled:opacity-50';
 
 export function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <label className={cx('flex flex-col gap-1 text-xs font-medium text-zinc-400', className)}>
+    <label className={cx('flex min-w-0 flex-col gap-2 text-xs font-medium text-zinc-400', className)}>
       {label}
       {children}
     </label>
@@ -125,10 +125,10 @@ export function Field({ label, children, className }: { label: string; children:
 
 export function Modal({ children, onClose, title, wide = false }: { children: ReactNode; onClose?: () => void; title: ReactNode; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#02040a]/75 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true">
-      <div className={cx('px-panel m-[3px] max-h-[90vh] w-full overflow-y-auto p-5', wide ? 'max-w-5xl' : 'max-w-lg')}>
-        <div className="mb-4 flex items-start justify-between gap-3 border-b-2 border-dashed border-zinc-700 pb-3">
-          <h2 className="text-base font-bold text-amber-300 drop-shadow-[2px_2px_0_#05080f]">{title}</h2>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#02040a]/80 backdrop-blur-sm p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true">
+      <div className={cx('px-panel max-h-[90dvh] w-full overflow-y-auto p-5', wide ? 'max-w-5xl' : 'max-w-2xl')}>
+        <div className="mb-4 flex items-start justify-between gap-3 border-b border-zinc-700 pb-3">
+          <h2 className="text-lg font-semibold text-zinc-50">{title}</h2>
           {onClose ? (
             <button type="button" aria-label="닫기" className="px-focus px-1 text-zinc-400 hover:text-zinc-50" onClick={onClose}>
               ✕

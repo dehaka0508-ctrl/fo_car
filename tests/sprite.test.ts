@@ -4,8 +4,8 @@ import type { Appearance } from '@/types/game';
 
 const look: Appearance = { hair: 'BLACK', skin: 3, eyes: 'DARK_BROWN' };
 
-describe('3등신 도트 캐릭터', () => {
-  it('모든 모습이 24 × 43 격자이고, 머리가 키의 1/3쯤인 3등신이다', () => {
+describe('2등신 도트 캐릭터', () => {
+  it('모든 모습이 24 × 32 격자이며 큰 머리와 작은 몸의 비율을 유지한다', () => {
     const variants = [
       {},
       { ball: true },
@@ -24,8 +24,8 @@ describe('3등신 도트 캐릭터', () => {
     const top = filled.indexOf(true);
     const bottom = filled.lastIndexOf(true);
     const neck = grid.findIndex((row) => row.includes('SSSS') && !row.includes('h'));
-    expect((neck - top) / (bottom - top + 1)).toBeGreaterThan(0.3);
-    expect((neck - top) / (bottom - top + 1)).toBeLessThan(0.38);
+    expect((neck - top) / (bottom - top + 1)).toBeGreaterThan(0.5);
+    expect((neck - top) / (bottom - top + 1)).toBeLessThan(0.7);
   });
 
   it('사각형이 격자 안에 있고 같은 줄에서 겹치지 않는다', () => {
@@ -46,7 +46,7 @@ describe('3등신 도트 캐릭터', () => {
     expect(solid.some((r) => r.fill === '#EF0107')).toBe(true);
     const striped = buildSprite({ appearance: look, kit: { primary: '#FFFFFF', secondary: '#000000' } });
     // 상의 몸통(21행)에 제2색 줄무늬 두 줄 (2칸씩)
-    const torso = striped.filter((r) => r.y === 21 && r.fill === '#000000');
+    const torso = striped.filter((r) => r.y === 23 && r.fill === '#000000');
     expect(torso.map((r) => [r.x, r.w])).toEqual([[9, 2], [13, 2]]);
   });
 

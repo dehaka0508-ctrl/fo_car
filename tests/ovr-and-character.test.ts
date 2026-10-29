@@ -3,6 +3,8 @@ import {
   bodyModifiers,
   determineInitialSquadStatus,
   generateInitialAttributes,
+  initialOvrDistribution,
+  rollInitialOVR,
 } from '@/engine/character';
 import { calculateOVR, rankPlayStyleFit } from '@/engine/ovr';
 import {
@@ -29,11 +31,11 @@ describe('OVR', () => {
     for (const role of allRoles()) expect(calculateOVR(flat(63), role)).toBe(63);
   });
 
-  it('결정력·오프더볼이 높으면 타겟맨보다 포처 OVR이 높다', () => {
+  it('능력치와 포지션이 같으면 초기 역할과 무관하게 OVR도 같다', () => {
     const attrs = { ...flat(50), finishing: 90, offTheBall: 90 };
     const poacher = calculateOVR(attrs, { position: 'ST', playStyle: 'POACHER' });
     const targetMan = calculateOVR(attrs, { position: 'ST', playStyle: 'TARGET_MAN' });
-    expect(poacher).toBeGreaterThan(targetMan);
+    expect(poacher).toBe(targetMan);
   });
 
   it('GK OVR은 필드 스탯을 무시한다', () => {
@@ -55,11 +57,14 @@ describe('캐릭터 생성', () => {
     expect(generateInitialAttributes(role, 180, 75, 7)).not.toEqual(generateInitialAttributes(role, 180, 75, 8));
   });
 
-  it('16세 초기 OVR은 모든 포지션·스타일에서 비슷한 범위다', () => {
+  it('16세 초기 OVR 추첨값은 모든 포지션·스타일에서 정확하게 반영된다', () => {
     for (const role of allRoles()) {
-      const ovr = calculateOVR(generateInitialAttributes(role, 182, 76, 3), role);
-      expect(ovr).toBeGreaterThanOrEqual(42);
-      expect(ovr).toBeLessThanOrEqual(62);
+      for (const seed of [3, 17, 90]) {
+      const ovr = calculateOVR(generateInitialAttributes(role, 182, 76, seed), role);
+      expect(ovr).toBeGreaterThanOrEqual(40);
+      expect(ovr).toBeLessThanOrEqual(70);
+      expect(ovr).toBe(rollInitialOVR(seed));
+      }
     }
   });
 
@@ -84,5 +89,26 @@ describe('캐릭터 생성', () => {
     expect(determineInitialSquadStatus(55, 62, false)).toMatchObject({ level: 'RESERVE', playingTime: 'RESERVE' });
     expect(determineInitialSquadStatus(52, 86, false)).toMatchObject({ level: 'YOUTH', playingTime: 'RESERVE' });
     expect(determineInitialSquadStatus(56, 55, true)).toMatchObject({ level: 'FIRST_TEAM', playingTime: 'GK_FIRST' });
+  });
+});
+
+
+describe('초기 OVR 볼츠만 추첨', () => {
+  it('40~70이고 50이 유일한 최빈값이며 높은 OVR의 천재도 나온다', () => {
+    const dist = initialOvrDistribution();
+    expect(dist[0].ovr).toBe(40);
+    expect(dist.at(-1)!.ovr).toBe(70);
+    expect(dist.reduce((sum, entry) => sum + entry.probability, 0)).toBeCloseTo(1, 10);
+    expect(dist.reduce((a, b) => a.probability > b.probability ? a : b).ovr).toBe(50);
+    for (const entry of dist) if (entry.ovr !== 50) expect(entry.probability).toBeLessThan(dist[10].probability);
+    const sample = Array.from({ length: 5000 }, (_, i) => rollInitialOVR(i));
+    expect(Math.min(...sample)).toBe(40);
+    expect(Math.max(...sample)).toBe(70);
+    expect(sample.some((ovr) => ovr >= 65)).toBe(true);
+    const role = { position: 'ST', playStyle: 'POACHER' } as const;
+    const genius = sample.findIndex((ovr) => ovr === 70);
+    const attributes = generateInitialAttributes(role, 182, 76, genius);
+    expect(calculateOVR(attributes, role)).toBe(70);
+    expect(attributes.finishing).toBeGreaterThan(attributes.tackling);
   });
 });

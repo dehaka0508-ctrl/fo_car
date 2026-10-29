@@ -9,7 +9,7 @@
  * 을 할 수 있다. 이 모듈은 페이즈 시작(자연 회복·사건 생성)과 진행 가능 여부를 담당한다.
  */
 import type { GameState, ShopItemDefinition, TrainingPlan, TurnPhase } from '@/types/game';
-import { rollEvents } from './events';
+import { eventTurnIndex, rollEvents } from './events';
 import { applyTraining } from './growth';
 import { clamp, rngFor } from './rng';
 import { canPurchase, purchaseItem } from './shop';
@@ -54,7 +54,17 @@ export function beginInterTurn(state: GameState, world: SimulationWorld, complet
     negotiation: { counterOffersUsed: 0, renewalRequested: false, log: [] },
   };
   const rng = rngFor(state.seed, 'events', state.turn.season, state.turn.phase, completedPhase);
-  return { ...next, events: rollEvents(next, world, completedPhase, rng) };
+  const events = rollEvents(next, world, completedPhase, rng);
+  const eventHistory = { ...state.eventHistory };
+  const turnIndex = eventTurnIndex(state);
+  // Seed cooldowns for events still present in an older save.
+  for (const event of state.events) {
+    eventHistory[event.definitionId] ??= { count: 1, lastTurn: turnIndex - 1 };
+  }
+  for (const event of events) {
+    eventHistory[event.definitionId] = { count: (eventHistory[event.definitionId]?.count ?? 0) + 1, lastTurn: turnIndex };
+  }
+  return { ...next, events, eventHistory };
 }
 
 export function interTurnBlockers(state: GameState): string[] {
@@ -76,7 +86,7 @@ export function trainInterTurn(state: GameState, plan: TrainingPlan): GameState 
 export const SHOP_OFFER_COUNT = 3;
 
 /**
- * 이번 턴 상점 진열: 아직 없고 지금 잔고로 살 수 있는 물건 중 무작위 3개.
+ * 이번 턴 상점 진열: 지금 잔고로 살 수 있는 물건 중 무작위 3개.
  * 순서는 (시드 · 시즌 · 턴)으로 고정해 같은 턴에는 다시 열어도 같은 물건이 나온다.
  */
 export function shopOffers(state: GameState): ShopItemDefinition[] {
@@ -84,7 +94,7 @@ export function shopOffers(state: GameState): ShopItemDefinition[] {
   const { player } = state;
   return rng
     .shuffle(SHOP_ITEMS)
-    .filter((item) => item.price <= player.money && !player.inventory.some((owned) => owned.itemId === item.id))
+    .filter((item) => item.price <= player.money)
     .slice(0, SHOP_OFFER_COUNT);
 }
 

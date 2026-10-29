@@ -280,7 +280,7 @@ function Pitch({
             <div key={`flash-${i}`} className="pointer-events-none absolute inset-0 flex items-center justify-center" style={{ zIndex: 6 }}>
               <span
                 className={cx(
-                  'font-pixel text-5xl font-bold drop-shadow-[4px_4px_0_#05080f] sm:text-7xl',
+                  'font-pixel text-5xl font-bold sm:text-7xl',
                   effect.tone === 'bad' ? 'text-rose-300' : 'text-amber-300',
                 )}
                 style={{ transform: `scale(${scale})`, opacity }}
@@ -378,7 +378,7 @@ export function HighlightScreen() {
             <PlayerToken kit={myKit} size={22} />
             <span className="truncate text-sm font-bold text-zinc-50">{briefing.playerTeam.name}</span>
           </div>
-          <span className="px-inset font-pixel m-[2px] px-3 py-1.5 text-xs text-amber-300 [text-shadow:0_0_6px_rgb(255_210_63/0.6)]">VS</span>
+          <span className="px-inset font-pixel m-[2px] px-3 py-1.5 text-xs text-amber-300">VS</span>
           <div className="flex min-w-0 items-center justify-end gap-3">
             <span className="truncate text-right text-sm font-bold text-zinc-50">{briefing.opponent.name}</span>
             <PlayerToken kit={theirKit} size={22} />
