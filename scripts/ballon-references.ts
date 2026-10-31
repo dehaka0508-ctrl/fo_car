@@ -84,7 +84,8 @@ export const BALLON_REFERENCES: BallonReference[] = [
   { label: '공격수 22골 · 무관', season: season('FORWARD', { apps: 40, rating: 7.2, g: 22, a: 4, kp: 20 }, { apps: 5, rating: 6.9, g: 2 }, [], 78, 65), target: { medianRank: [16, 30] } },
   { label: '공격수 50골 · 트레블', season: season('FORWARD', { apps: 52, rating: 7.95, g: 50, a: 10, kp: 40 }, { apps: 6, rating: 7.3, g: 5 }, [club('ENG_PL'), club('UEFA_CL'), club('ENG_FA_CUP')]), target: { win: [0.95, 1] } },
   { label: '공격수 사우디 40골 · AFC 더블', season: season('FORWARD', { apps: 44, rating: 7.8, g: 40, a: 2, kp: 14 }, { apps: 6, rating: 7.1, g: 3 }, [club('KSA_SPL'), club('KSA_KINGS_CUP'), club('AFC_CL')], 67), target: { win: [0, 0.1], medianRank: [5, 16] } },
-  { label: '플레이메이커 20도움 · UCL+리그', season: season('MIDFIELDER', { apps: 48, rating: 7.35, g: 7, a: 20, kp: 100 }, { apps: 6, rating: 7.0, g: 1, a: 2 }, [club('ENG_PL'), club('UEFA_CL')]), target: { win: [0.15, 0.55], podium: [0.5, 0.9] } },
+  // UCL 우승 점수 소폭 증가를 반영한 허용 구간. 다른 포지션·무관 시즌 기준은 유지한다.
+  { label: '플레이메이커 20도움 · UCL+리그', season: season('MIDFIELDER', { apps: 48, rating: 7.35, g: 7, a: 20, kp: 100 }, { apps: 6, rating: 7.0, g: 1, a: 2 }, [club('ENG_PL'), club('UEFA_CL')]), target: { win: [0.15, 0.65], podium: [0.5, 0.9] } },
   { label: '플레이메이커 20도움 · 무관', season: season('MIDFIELDER', { apps: 48, rating: 7.35, g: 7, a: 20, kp: 100 }, { apps: 6, rating: 7.0, g: 1, a: 2 }, []), target: { medianRank: [10, 22] } },
   { label: '박스 투 박스 · UCL+리그', season: season('MIDFIELDER', { apps: 48, rating: 7.4, g: 8, a: 12, kp: 45 }, { apps: 6, rating: 7.0, g: 1 }, [club('ENG_PL'), club('UEFA_CL')]), target: { medianRank: [2, 8] } },
   { label: '딥 라잉 PM · UCL+리그+유로', season: season('MIDFIELDER', { apps: 50, rating: 7.25, g: 4, a: 10, kp: 50 }, { apps: 7, rating: 7.2, a: 1 }, [club('ENG_PL'), club('UEFA_CL'), nation('EURO')]), target: { win: [0.08, 0.35], podium: [0.35, 0.75] } },
