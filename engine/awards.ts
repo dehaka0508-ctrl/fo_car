@@ -17,6 +17,7 @@ import type {
   Confederation,
   GameState,
   ID,
+  LeagueDefinition,
   PlayerStatLine,
   PositionGroup,
   TrophyWin,
@@ -59,8 +60,8 @@ export function impactScore(line: PlayerStatLine, group: PositionGroup, eligible
 }
 
 const TROPHY_POINTS: Record<string, number> = {
-  UEFA_CL: 14, UEFA_EL: 5, UEFA_ECL: 2.5, AFC_CL: 3.5, CONMEBOL_LIB: 7, CONCACAF_CC: 2.5, CAF_CL: 3.5,
-  WORLD_CUP: 20, EURO: 12, COPA_AMERICA: 12, ASIAN_CUP: 5, AFCON: 5, GOLD_CUP: 3, NATIONS_LEAGUE: 3, OLYMPICS: 2,
+  UEFA_CL: 16, UEFA_EL: 5, UEFA_ECL: 2.5, AFC_CL: 3.5, CONMEBOL_LIB: 7, CONCACAF_CC: 2.5, CAF_CL: 3.5,
+  WORLD_CUP: 22, EURO: 12, COPA_AMERICA: 12, ASIAN_CUP: 5, AFCON: 5, GOLD_CUP: 3, NATIONS_LEAGUE: 3, OLYMPICS: 2,
 };
 
 /** 더블·압도 보너스에서 각 대륙 최상위 클럽 대회의 무게 (UCL 기준) */
@@ -71,7 +72,7 @@ function trophyPoints(world: SimulationWorld, trophies: TrophyWin[], domesticRec
   return trophies.reduce((sum, t) => {
     if (TROPHY_POINTS[t.competitionId] !== undefined) return sum + TROPHY_POINTS[t.competitionId];
     const league = world.leagues[t.competitionId];
-    if (league) return sum + (league.tier === 1 ? 8 : 2) * leagueRecognition(league.strength);
+    if (league) return sum + (league.tier === 1 ? 8 : 2) * worldCandidateRecognition(league);
     return sum + 3 * domesticRecognition; // 국내 컵
   }, 0);
 }
@@ -235,6 +236,31 @@ export function npcBallonScores(rng: Rng): Array<{ group: PositionGroup; score: 
   return out;
 }
 
+/** 세계 시상 NPC도 소속 리그의 수준을 적용한다. 상위 리그의 기준 점수를 그대로 복사하지 않는다. */
+export function worldCandidateRecognition(league: LeagueDefinition | undefined): number {
+  if (!league) return 0.35;
+  const recognition = leagueRecognition(league.strength);
+  if (league.tier !== 1) return Math.min(0.55, recognition * 0.65);
+  if (league.confederation === 'UEFA' && ['ENG', 'ESP', 'GER', 'ITA', 'FRA'].includes(league.nation)) return 1;
+  if (league.confederation === 'UEFA') return Math.min(0.9, recognition);
+  if (league.confederation === 'CONMEBOL') return Math.min(0.75, recognition);
+  return Math.min(0.65, recognition);
+}
+
+/** 최상위권 기본 점수 → 실제 소속 리그 보정. 전력만 높은 비유럽 구단이 같은 점수로 경쟁하는 오류를 막는다. */
+export function worldBallonCandidates(rng: Rng, world: SimulationWorld): Candidate[] {
+  const clubs = Object.values(world.clubStates);
+  const strong = clubs.filter((club) => club.power >= 80);
+  const eligible = strong.length ? strong : clubs;
+  const factors = eligible.map((club) => worldCandidateRecognition(world.leagues[club.leagueId]));
+  const weights = eligible.map((club, index) => factors[index] ** 4 * (club.power / 80) ** 3);
+  return npcBallonScores(rng).map(({ group, score }) => {
+    if (!eligible.length) return npcCandidate(rng, world, [], group, score * 0.35);
+    const index = rng.weightedIndex(weights);
+    return npcCandidate(rng, world, [eligible[index].clubId], group, score * factors[index]);
+  });
+}
+
 /** 리그 수준 보정: 약한 리그에서 몰아친 기록은 세계 시상에서 덜 인정받는다 (EPL 1.0, K리그1 0.5) */
 export function leagueRecognition(strength: number): number {
   return Math.min(1.05, Math.max(0.35, (strength - 50) / 28));
@@ -292,6 +318,8 @@ export const BALLON_CONFIG = {
   dominanceRatingSpan: 0.5,
   internationalScale: 0.5,
   reputationWeight: 0.15,
+  /** 우승 대회에서 주축으로 뛴 경우에만 받는 소폭 가산점 */
+  majorContribution: { UEFA_CL: 2, WORLD_CUP: 3 },
 };
 
 /** 압도 보너스를 여는 국가대표 대회와 그 무게 */
@@ -303,15 +331,19 @@ export interface SeasonPerformance {
   stats: Record<CompetitionType, PlayerStatLine>;
   trophies: TrophyWin[];
   leagueStrength: number;
+  /** 실제 시즌 입력은 소속 리그를 명시해 NPC와 동일한 수준 보정을 적용한다. */
+  leagueId?: ID;
   reputation: number;
   /** 클럽 공식전 경기 수 (출전 비율 계산용) */
   eligibleMatches: number;
+  majorParticipation?: Partial<Record<'UEFA_CL' | 'WORLD_CUP', { matches: number; starts: number; minutes: number }>>;
 }
 
 export interface BallonBreakdown {
   performance: number;
   international: number;
   teamSuccess: number;
+  majorContribution: number;
   /** 0~1: 평점·클린시트·키패스가 포지션 기준보다 얼마나 압도적인가 */
   dominance: number;
   legacy: number;
@@ -336,7 +368,7 @@ export function ballonBreakdown(world: SimulationWorld, perf: SeasonPerformance)
   const club = mergeStatLines(stats.LEAGUE, stats.DOMESTIC_CUP, stats.CONTINENTAL);
   const rating = averageRating(club);
   const w = c.output[group];
-  const recognition = leagueRecognition(perf.leagueStrength);
+  const recognition = perf.leagueId ? worldCandidateRecognition(world.leagues[perf.leagueId]) : leagueRecognition(perf.leagueStrength);
 
   // 개인 성과 (리그 수준 보정)
   const ratingPart =
@@ -373,13 +405,24 @@ export function ballonBreakdown(world: SimulationWorld, perf: SeasonPerformance)
   const success = Math.max(double * (wonCup ? 1.15 : 1), intlMajor, continental * 0.5);
   const legacy = c.legacyBonus[group] * dominance * success;
 
+  // 출전 비중은 실제 우승팀의 해당 대회 기록만 사용한다. 리그 주전이나 단순 소속은 근거가 아니다.
+  const majorContribution = (['UEFA_CL', 'WORLD_CUP'] as const).reduce((sum, competitionId) => {
+    if (!won.includes(competitionId)) return sum;
+    const participation = perf.majorParticipation?.[competitionId];
+    if (!participation?.matches) return sum;
+    const minutesShare = clamp(participation.minutes / (participation.matches * 90), 0, 1);
+    const startsShare = clamp(participation.starts / participation.matches, 0, 1);
+    const role = clamp((minutesShare * 0.65 + startsShare * 0.35 - 0.35) / 0.4, 0, 1);
+    return sum + c.majorContribution[competitionId] * role;
+  }, 0);
   const reputation = perf.reputation * c.reputationWeight;
-  const total = performance + international + teamSuccess + legacy + reputation;
+  const total = performance + international + teamSuccess + legacy + reputation + majorContribution;
   const round = (v: number) => Math.round(v * 10) / 10;
   return {
     performance: round(performance),
     international: round(international),
     teamSuccess: round(teamSuccess),
+    majorContribution: round(majorContribution),
     dominance,
     legacy: round(legacy),
     reputation: round(reputation),
@@ -393,12 +436,22 @@ export function seasonPerformance(state: GameState, world: SimulationWorld): Sea
   const eligibleMatches = turns
     .filter((t) => t.turn.phase !== 'PRESEASON')
     .reduce((n, t) => n + t.matches.filter((m) => m.competitionType !== 'FRIENDLY' && m.competitionType !== 'RESERVE').length, 0);
-  const leagueId = turns.filter((t) => t.leagueId).at(-1)?.leagueId;
+  const leagueId = turns.filter((t) => t.leagueId).at(-1)?.leagueId ?? undefined;
+  const trophies = turns.flatMap((turn) => turn.trophies);
+  const majorParticipation: SeasonPerformance['majorParticipation'] = {};
+  for (const competitionId of ['UEFA_CL', 'WORLD_CUP'] as const) {
+    const winners = new Set(trophies.filter((trophy) => trophy.competitionId === competitionId).map((trophy) => trophy.teamId));
+    if (!winners.size) continue;
+    const matches = [...new Map(turns.flatMap((turn) => turn.matches).filter((match) => match.competitionId === competitionId && winners.has(match.playerTeamSide === 'HOME' ? match.home.id : match.away.id)).map((match) => [match.fixtureId, match])).values()];
+    majorParticipation[competitionId] = { matches: matches.length, starts: matches.filter((match) => match.player?.started).length, minutes: matches.reduce((sum, match) => sum + (match.player?.minutes ?? 0), 0) };
+  }
   return {
     group: POSITION_META[state.player.profile.role.position].group,
     stats: seasonStats(turns, () => true),
-    trophies: turns.flatMap((t) => t.trophies),
+    trophies,
+    majorParticipation,
     leagueStrength: leagueId ? world.leagues[leagueId].strength : 55,
+    leagueId,
     reputation: state.player.reputation,
     eligibleMatches,
   };
@@ -415,7 +468,7 @@ export function worldAwards(state: GameState, world: SimulationWorld, season: nu
   const me = playerCandidate(state, score);
   const bigClubs = Object.values(world.clubStates).filter((c) => c.power >= 80).map((c) => c.clubId);
 
-  const pool: Candidate[] = npcBallonScores(rng).map(({ group, score }) => npcCandidate(rng, world, bigClubs, group, score));
+  const pool = worldBallonCandidates(rng, world);
 
   const awards: AwardWin[] = [];
   const entries: CeremonyEntry[] = [];
